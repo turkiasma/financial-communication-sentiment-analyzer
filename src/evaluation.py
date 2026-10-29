@@ -14,7 +14,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_f
 
 from src.evaluation_baseline import BASELINE_VERSION, predict_baseline
 from src.evaluation_data import (
-    EvaluationDataset, LABELS, load_annotations, load_fiqa, load_phrasebank, text_key, validate_examples,
+    EvaluationDataset, LABELS, load_fiqa, load_phrasebank, load_sentfin,
+    text_key, validate_examples,
 )
 from src.model_config import MAX_INPUT_TOKENS, MODEL_ID, MODEL_REVISION
 
@@ -201,10 +202,10 @@ def score_evaluation(dataset: EvaluationDataset, cache: dict, *, include_text: b
     errors.sort(key=lambda row: (-row["confidence"], row["example_id"]))
     limitations = [dataset.provenance.get("warning", ""),
                    "No model/baseline fitting or threshold tuning on these labels; no claim that source text was absent from pretraining.",
-                   "FiQA uses target/aspect scores reduced to three classes; this differs from the original regression task and the sentence-level FinBERT objective.",
+                   "Reference annotation task and selected text domain may differ from the quarterly earnings application.",
                    "Subgroup differences are descriptive, with no significance/causal or demographic-fairness claim; absent classes affect fixed-label macro averages.",
                    "Softmax confidence is not calibrated correctness. Pattern tags are co-occurrences, not established error causes.",
-                   "Earnings human annotation remains pending unless this run explicitly uses the reviewed earnings_human dataset."]
+                   "Quarterly earnings predictions remain unlabelled and are not used as evaluation ground truth."]
     return {"evaluation_version": EVALUATION_VERSION, "dataset": dataset.provenance, "dataset_audit": dataset.audit,
             "coverage": {"eligible_labelled_examples": len(dataset.records), "evaluated_examples": len(records),
                          "model_length_exclusions": cache.get("excluded", [])},
@@ -216,18 +217,18 @@ def score_evaluation(dataset: EvaluationDataset, cache: dict, *, include_text: b
                                    "mean_incorrect": fmean(wrong_confidence) if wrong_confidence else None,
                                    "high_confidence_errors_at_least_0_9": sum(p >= .9 for p in wrong_confidence)},
             "errors": errors, "robustness": subgroup_metrics(records, rows, predictions),
-            "text_included": include_text, "limitations": [note for note in limitations if note],
-            "in_domain_annotation_status": "reviewed input supplied" if dataset.provenance.get("dataset") == "earnings_human" else "pending human review"}
+            "text_included": include_text, "limitations": [note for note in limitations if note]}
 
 
 def render_evaluation_report(result: dict) -> str:
     dataset = result["dataset"]
     lines = ["# FinSentiment model evaluation", "", "## Dataset and protocol", "",
              f"Dataset: **{dataset['dataset']}**; split/subset: **{dataset['split']}**; revision: `{dataset.get('revision', 'not supplied')}`.",
-             f"Source: {dataset.get('source_url', 'local human-reviewed annotation file')}.",
+             f"Source: {dataset.get('source_url', 'not supplied')}.",
              f"License/access: {dataset.get('license', 'Original source restrictions apply')}.", "",
              f"**{dataset.get('warning', '')}**", "",
-             f"Mapping: {dataset.get('label_mapping', 'Human-reviewed named labels')}.",
+             f"Mapping: {dataset.get('label_mapping', 'Original named reference labels')}.",
+             f"Evaluation role: {dataset.get('role', 'not supplied')}. Annotation provenance: {dataset.get('annotation_method', 'See dataset source/protocol')}.",
              f"Protocol: `{result['evaluation_version']}`; model `{MODEL_ID}` at `{MODEL_REVISION}`, CPU; baseline `{BASELINE_VERSION}`.",
              "The baseline vocabulary and thresholds were fixed before benchmark predictions; no fine-tuning or test-label fitting occurred.", "",
              f"Raw rows: {result['dataset_audit'].get('loaded_rows')}; retained after dataset exclusions: {result['coverage']['eligible_labelled_examples']}; evaluated by both models: {result['coverage']['evaluated_examples']}; overlong exclusions: {len(result['coverage']['model_length_exclusions'])}.",
@@ -238,6 +239,12 @@ def render_evaluation_report(result: dict) -> str:
              "| --- | --- | --- | --- | --- | --- | --- |"]
     for model, metrics in result["models"].items():
         lines.append(f"| {model} | {metrics['sample_size']} | {metrics['accuracy']:.4f} | {metrics['macro_precision']:.4f} | {metrics['macro_recall']:.4f} | {metrics['macro_f1']:.4f} | {metrics['weighted_f1']:.4f} |")
+    lines += ["", "Negative-class recall: " + "; ".join(
+        f"{model}={metrics['per_class']['negative']['recall']:.4f} (support={metrics['per_class']['negative']['support']})"
+        for model, metrics in result["models"].items()) + ".", ""]
+    if "overlap" in result["dataset_audit"]:
+        lines += ["Reference overlap audit: " + json.dumps(result["dataset_audit"]["overlap"], sort_keys=True) + ".",
+                  "Near-duplicate screens are bounded word-set similarity checks, not exhaustive or semantic guarantees. They flag candidates for review and do not remove sentences based on model outcomes.", ""]
     for model, metrics in result["models"].items():
         lines += ["", f"### {model}: class results", "",
                   "| True class | Support | Precision | Recall | F1 | Predicted count |", "| --- | --- | --- | --- | --- | --- |"]
@@ -249,6 +256,9 @@ def render_evaluation_report(result: dict) -> str:
             lines.append(f"| {label} | " + " | ".join(map(str, counts)) + " |")
         lines += [""]
     lines += ["## Confidence and error review", "", json.dumps(result["confidence_summary"], sort_keys=True), "",
+              "Observed FinBERT error transitions: " + json.dumps(dict(Counter(row["error_type"] for row in result["errors"])), sort_keys=True) + ".",
+              "Observed error-tag counts (tags can overlap): " + json.dumps(dict(Counter(
+                  tag for row in result["errors"] for tag in row["pattern_tags"].split(";") if tag)), sort_keys=True) + ".", "",
               "Pattern tags identify lexical co-occurrences for review; no causal error explanation is inferred. Text is omitted unless explicitly requested for local review.", "",
               "| Example ID | Truth | Prediction | Confidence | Pattern tags |", "| --- | --- | --- | --- | --- |"]
     for row in result["errors"][:10]:
@@ -262,8 +272,7 @@ def render_evaluation_report(result: dict) -> str:
               "| Model | Dimension | Group | N | Accuracy | Macro F1 | Warning |", "| --- | --- | --- | --- | --- | --- | --- |"]
     for row in result["robustness"]:
         lines.append(f"| {row['model']} | {row['dimension']} | {row['group']} | {row['sample_size']} | {row['accuracy']:.4f} | {row['macro_f1']:.4f} | {row['warning']} |")
-    lines += ["", "## In-domain annotation", "", result["in_domain_annotation_status"], "",
-              "No company/quarter accuracy is inferred from unlabelled earnings predictions.", "", "## Limitations", ""]
+    lines += ["", "No company/quarter accuracy is inferred from unlabelled earnings predictions.", "", "## Limitations", ""]
     lines += [f"- {note}" for note in result["limitations"]]
     return "\n".join(lines) + "\n"
 
@@ -280,6 +289,8 @@ def export_evaluation(result: dict, cache: dict, output_dir: str | Path) -> None
     directory = Path(output_dir)
     names = ("evaluation_metrics.json", "evaluation_metrics.csv", "confusion_matrix.csv", "error_analysis.csv",
              "robustness_summary.csv", "evaluation_report.md", "model_predictions.json", "excluded_examples.csv")
+    if result["dataset"].get("role") == "primary_external_sample":
+        names += ("external_evaluation_metrics.csv", "external_evaluation_metrics.json", "external_evaluation_report.md")
     if any((directory / name).exists() for name in names):
         raise ValueError("Evaluation artifacts already exist; choose a new output directory.")
     directory.mkdir(parents=True, exist_ok=True)
@@ -310,15 +321,20 @@ def export_evaluation(result: dict, cache: dict, output_dir: str | Path) -> None
     _write_csv(directory / names[7], exclusions, ["example_id", "reason", "duplicate_of", "targets", "token_count"])
     with (directory / names[5]).open("x", encoding="utf-8") as output:
         output.write(render_evaluation_report(result))
+    if len(names) > 8:
+        for source_name, destination_name in ((names[1], names[8]), (names[0], names[9]), (names[5], names[10])):
+            with (directory / destination_name).open("xb") as output:
+                output.write((directory / source_name).read_bytes())
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", choices=("phrasebank", "fiqa", "earnings"), required=True)
-    parser.add_argument("--split", help="allagree for PhraseBank; train for accessible FiQA; annotation_sample for reviewed earnings.")
+    parser.add_argument("--dataset", choices=("sentfin", "fiqa", "phrasebank"), required=True)
+    parser.add_argument("--split", help="allagree for PhraseBank; train for FiQA; single_entity for SEntFiN (no official test split).")
+    parser.add_argument("--sample-size", type=int, help="SEntFiN stratified sample size; default 2000.")
+    parser.add_argument("--seed", type=int, default=42, help="SEntFiN sampling seed; fixed protocol uses 42.")
     parser.add_argument("--data-dir", type=Path, default=Path("data/evaluation"))
     parser.add_argument("--phrasebank-reference", type=Path, help="Optional 50Agree text-overlap reference archive for FiQA.")
-    parser.add_argument("--annotations", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--local-files-only", action="store_true")
@@ -328,14 +344,16 @@ def main(argv: list[str] | None = None) -> None:
     try:
         if args.output_dir.exists() and any(args.output_dir.iterdir()):
             raise ValueError("Evaluation output directory is not empty; choose a new directory before inference.")
+        if args.sample_size is not None and args.dataset != "sentfin":
+            raise ValueError("--sample-size applies only to SEntFiN; original benchmark cohorts are unchanged.")
         if args.dataset == "phrasebank":
             dataset = load_phrasebank(args.data_dir, split=args.split or "allagree")
         elif args.dataset == "fiqa":
             dataset = load_fiqa(args.data_dir, split=args.split or "train", phrasebank_reference=args.phrasebank_reference)
         else:
-            if args.annotations is None or args.split not in (None, "annotation_sample"):
-                raise ValueError("Earnings evaluation requires --annotations with reviewed labels and split annotation_sample.")
-            dataset = load_annotations(args.annotations)
+            if args.split not in (None, "single_entity"):
+                raise ValueError("SEntFiN has no published test partition; use split single_entity.")
+            dataset = load_sentfin(args.data_dir, sample_size=args.sample_size if args.sample_size is not None else 2000, seed=args.seed)
         if args.predictions_input is not None:
             cache = json.loads(args.predictions_input.read_text(encoding="utf-8"))
         else:
@@ -347,7 +365,7 @@ def main(argv: list[str] | None = None) -> None:
     print(dataset.provenance["warning"])
     for model, metrics in result["models"].items():
         print(f"{dataset.provenance['dataset']} / {dataset.provenance['split']} | {model} | N={metrics['sample_size']} | accuracy={metrics['accuracy']:.4f} | macro F1={metrics['macro_f1']:.4f}")
-    print(f"CPU | Output: {args.output_dir} | Earnings annotation: {result['in_domain_annotation_status']}")
+    print(f"CPU | Output: {args.output_dir}")
 
 
 if __name__ == "__main__":

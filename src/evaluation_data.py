@@ -1,6 +1,7 @@
-"""Small local evaluation datasets, explicit retrieval and blind human-annotation samples."""
+"""Small local evaluation datasets, explicit retrieval and external benchmark audits."""
 
 import argparse
+import ast
 from collections import Counter, defaultdict
 import csv
 from dataclasses import dataclass
@@ -10,19 +11,23 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import unicodedata
 from urllib.request import Request, urlopen
 import zipfile
 
-from src.records import read_records
 
 LABELS = ("negative", "neutral", "positive")
 PHRASEBANK_REVISION = "8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964"
 FIQA_REVISION = "acd0f4cfafa6421774bc8f009e8fa3e0ec441357"
+SENTFIN_REVISION = "eba43610fe3cb57a3e5773cd6c037da1f8992ad5"
+SENTFIN_SHA256 = "570af7ba58f724f3fcc414dd5ba80da5b1a3b342134d76c6ebdf53a32c54a92f"
 FIQA_MAPPING = "negative: score < -0.1; neutral: -0.1 <= score < 0.1; positive: score >= 0.1"
 PHRASEBANK_WARNING = "Financial PhraseBank overlaps FinBERT supervised training; this is not independent held-out performance."
 FIQA_WARNING = "Original labelled training partition, evaluated without fitting; not held-out test performance or guaranteed unseen data. The original FinBERT study also used FiQA for regression experiments; the released classifier's FiQA exposure is unverified. Target/aspect labels are compared to a sentence-level model."
 SOURCES = {
+    "sentfin": {filename: f"https://raw.githubusercontent.com/pyRis/SEntFiN/{SENTFIN_REVISION}/{filename}"
+                for filename in ("SEntFiN.csv", "LICENSE")},
     "phrasebank": {"FinancialPhraseBank-v1.0.zip":
         f"https://huggingface.co/datasets/takala/financial_phrasebank/resolve/{PHRASEBANK_REVISION}/data/FinancialPhraseBank-v1.0.zip"},
     "fiqa": {f"task1_{kind}_ABSA_{split}.json":
@@ -123,7 +128,7 @@ def fetch_dataset(dataset: str, data_dir: str | Path, *, retrieval_date: str) ->
     """Explicitly fetch only pinned small dataset files; never called by evaluation."""
     date.fromisoformat(retrieval_date)
     if dataset not in SOURCES:
-        raise ValueError("Retrievable datasets are phrasebank and fiqa.")
+        raise ValueError("Retrievable datasets are phrasebank, fiqa and sentfin.")
     directory = Path(data_dir) / dataset
     directory.mkdir(parents=True, exist_ok=True)
     files = []
@@ -253,61 +258,200 @@ def load_fiqa(data_dir: str | Path, *, split: str = "train", phrasebank_referenc
         "label_mapping": FIQA_MAPPING, "files": files})
 
 
-ANNOTATION_COLUMNS = ["example_id", "sentence_id", "document_id", "company", "ticker", "fiscal_year",
-                      "fiscal_quarter", "source_url", "source_sha256", "text", "human_label", "annotator_id",
-                      "review_status", "annotation_notes"]
+def parse_sentfin_decisions(raw: str) -> tuple[dict[str, str], bool]:
+    """Parse only a dictionary of string targets/labels, never executable code.
+
+    Thirteen published rows have unescaped apostrophes in entity names. For those
+    rows only, a restricted, full-coverage string-pair grammar reads the original
+    target verbatim. Unknown labels or unparsed trailing content are errors.
+    """
+    if not isinstance(raw, str) or not raw.startswith("{") or not raw.endswith("}"):
+        raise ValueError("SEntFiN Decisions must be a string dictionary.")
+    fallback = False
+    try:
+        node = ast.parse(raw, mode="eval").body
+        if not isinstance(node, ast.Dict):
+            raise ValueError("Decisions must be a dictionary.")
+        pairs = [(ast.literal_eval(key), ast.literal_eval(value)) for key, value in zip(node.keys, node.values)]
+    except SyntaxError:
+        fallback = True
+        pattern = re.compile(r"\s*'(.+?)'\s*:\s*'([^']+)'\s*(?:,\s*|$)")
+        inner, position, pairs = raw[1:-1], 0, []
+        while position < len(inner):
+            match = pattern.match(inner, position)
+            if match is None:
+                raise ValueError("Malformed SEntFiN Decisions string; no labels inferred.")
+            pairs.append(match.groups())
+            position = match.end()
+    if not pairs:
+        raise ValueError("SEntFiN requires at least one target/reference label.")
+    decisions = {}
+    for target, label in pairs:
+        if not isinstance(target, str) or not target.strip() or not isinstance(label, str):
+            raise ValueError("SEntFiN targets and reference labels must be strings.")
+        if target in decisions:
+            raise ValueError("Duplicate target in SEntFiN Decisions.")
+        normalize_label(label)
+        decisions[target] = label
+    return decisions, fallback
 
 
-def prepare_annotations(source_path: str | Path, output_path: str | Path, *, size: int = 80, seed: int = 42) -> dict:
-    source = sorted(read_records(source_path), key=lambda r: r["sentence_id"])
-    unique = {}
-    for record in source:
-        unique.setdefault(text_key(record["text"]), record)
-    if type(size) is not int or size <= 0 or size > len(unique):
-        raise ValueError(f"Annotation size must be from 1 to {len(unique)} distinct source texts.")
-    groups = defaultdict(list)
-    for record in unique.values():
-        groups[record["document_id"]].append(record)
-    rng = random.Random(seed)
-    for group in groups.values():
-        rng.shuffle(group)
-    selected = []
-    while len(selected) < size:
-        for doc_id in sorted(groups):
-            if groups[doc_id] and len(selected) < size:
-                selected.append(groups[doc_id].pop())
-    random.Random(seed + 1).shuffle(selected)
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("x", encoding="utf-8", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=ANNOTATION_COLUMNS, lineterminator="\n")
-        writer.writeheader()
-        for record in selected:
-            writer.writerow({**{k: record[k] for k in ANNOTATION_COLUMNS if k in record},
-                             "example_id": f"earnings_human_{record['sentence_id']}", "human_label": "",
-                             "annotator_id": "", "review_status": "pending", "annotation_notes": ""})
-    return {"seed": seed, "source_rows": len(source), "distinct_texts": len(unique), "selected": size,
-            "duplicates_not_sampled": len(source) - len(unique),
-            "per_document": dict(sorted(Counter(r["document_id"] for r in selected).items())),
-            "annotation_status": "pending", "source_file": _file_info(Path(source_path))}
+def filter_reference_overlaps(records: list[dict], references: list[dict]) -> tuple[list[dict], list[dict], dict]:
+    exact = {record["text"] for record in references}
+    normalized = {text_key(record["text"]) for record in references}
+    retained, excluded = [], []
+    for record in records:
+        reason = ("exact_reference_overlap" if record["text"] in exact else
+                  "normalized_reference_overlap" if text_key(record["text"]) in normalized else None)
+        if reason:
+            excluded.append({"example_id": record["example_id"], "reason": reason})
+        else:
+            retained.append(record)
+    return retained, excluded, {"reference_rows": len(references),
+                                "exact_matches": sum(row["reason"] == "exact_reference_overlap" for row in excluded),
+                                "normalized_only_matches": sum(row["reason"] == "normalized_reference_overlap" for row in excluded)}
 
 
-def load_annotations(path: str | Path) -> EvaluationDataset:
-    with Path(path).open(encoding="utf-8", newline="") as source:
-        rows = list(csv.DictReader(source))
-    records = []
-    for row in rows:
-        if row.get("review_status") != "reviewed" or not row.get("annotator_id", "").strip() or not row.get("human_label", "").strip():
-            raise ValueError("Human annotation is pending: every example needs a reviewed human label and annotator_id.")
-        records.append({**row, "true_label": normalize_label(row["human_label"]), "original_label": row["human_label"],
-                        "source_dataset": "earnings_human", "split": "annotation_sample", "source_type": "earnings"})
+def near_duplicate_audit(records: list[dict], references: list[dict] | None = None) -> dict:
+    """Bounded lexical similarity screen, not semantic deduplication or a proof of no overlap.
+
+    Word-set Jaccard >=0.9, >=4 tokens; five rarest reference tokens generate up
+    to 200 candidates per row, with 2,000 reported pairs maximum. No text is
+    discarded: a changed number/negation can change financial meaning.
+    """
+    token_sets, postings, ids, normalized = [], defaultdict(list), [], []
+    def add(record):
+        tokens = set(re.findall(r"\w+", text_key(record["text"])))
+        index = len(ids)
+        ids.append(record["example_id"])
+        token_sets.append(tokens)
+        normalized.append(text_key(record["text"]))
+        for token in tokens:
+            postings[token].append(index)
+    if references is not None:
+        for record in references:
+            add(record)
+    pairs, checked = [], 0
+    for record in sorted(records, key=lambda row: row["example_id"]):
+        tokens = set(re.findall(r"\w+", text_key(record["text"])))
+        if len(tokens) >= 4:
+            candidates = set()
+            rare = sorted((token for token in tokens if 0 < len(postings[token]) <= 200),
+                          key=lambda token: (len(postings[token]), token))[:5]
+            for token in rare:
+                candidates.update(postings[token])
+            for index in sorted(candidates)[:200]:
+                if normalized[index] == text_key(record["text"]):
+                    continue  # Exact/normalized equality has a separate complete audit.
+                checked += 1
+                other = token_sets[index]
+                similarity = len(tokens & other) / len(tokens | other)
+                if similarity >= .9:
+                    pairs.append({"example_id": record["example_id"], "reference_id": ids[index], "word_set_jaccard": similarity})
+                    if len(pairs) == 2000:
+                        return {"pairs": pairs, "truncated": True, "candidate_comparisons": checked,
+                                "method": "bounded word-set Jaccard >=0.9; report only, not exhaustive"}
+        if references is None:
+            add(record)
+    return {"pairs": pairs, "truncated": False, "candidate_comparisons": checked,
+            "method": "bounded word-set Jaccard >=0.9; report only, not exhaustive"}
+
+
+def stratified_sample(records: list[dict], size: int, seed: int = 42) -> list[dict]:
+    """Largest-remainder class quotas preserve proportions, without using predictions."""
     validate_examples(records)
-    records, excluded = deduplicate(records)
-    return EvaluationDataset(records, {"loaded_rows": len(rows), "retained_rows": len(records), "excluded": excluded,
-                                      "class_counts": {label: sum(r["true_label"] == label for r in records) for label in LABELS}},
-                             {"dataset": "earnings_human", "split": "annotation_sample", "revision": "user-reviewed-local-file",
-                              "warning": "Small human-reviewed in-domain sample; not a population accuracy estimate.",
-                              "files": [_file_info(Path(path))]})
+    if type(size) is not int or not 1 <= size <= len(records):
+        raise ValueError(f"Sample size must be from 1 to {len(records)}.")
+    groups = {label: sorted((r for r in records if r["true_label"] == label), key=lambda r: r["example_id"]) for label in LABELS}
+    raw = {label: size * len(groups[label]) / len(records) for label in LABELS}
+    quotas = {label: math.floor(raw[label]) for label in LABELS}
+    for label in sorted(LABELS, key=lambda label: (-(raw[label] - quotas[label]), label))[:size - sum(quotas.values())]:
+        quotas[label] += 1
+    selected, rng = [], random.Random(seed)
+    for label in LABELS:
+        rng.shuffle(groups[label])
+        selected.extend(groups[label][:quotas[label]])
+    return sorted(selected, key=lambda row: row["example_id"])
+
+
+def _external_references(data_dir: Path) -> tuple[list[dict], list[dict]]:
+    archive = data_dir / "phrasebank" / "FinancialPhraseBank-v1.0.zip"
+    references = [{"example_id": "reference_" + r["example_id"], "text": r["text"]}
+                  for r in _phrasebank_rows(archive, "50Agree")]
+    files = [_file_info(archive)]
+    for kind in ("headline", "post"):
+        for split in ("train", "test"):
+            path = data_dir / "fiqa" / f"task1_{kind}_ABSA_{split}.json"
+            raw = _fiqa_object(path)
+            for source_id, record in raw.items():
+                if not isinstance(record.get("sentence"), str) or not record["sentence"].strip():
+                    raise ValueError("Invalid reference text in overlap audit.")
+                references.append({"example_id": f"reference_fiqa_{kind}_{split}_{source_id}", "text": record["sentence"]})
+            files.append(_file_info(path))
+    return references, files
+
+
+def load_sentfin(data_dir: str | Path, *, sample_size: int = 2000, seed: int = 42) -> EvaluationDataset:
+    root = Path(data_dir)
+    path = root / "sentfin" / "SEntFiN.csv"
+    if _file_info(path)["sha256"] != SENTFIN_SHA256:
+        raise ValueError("SEntFiN content does not match the pinned author-published dataset; fetch the exact snapshot.")
+    with path.open(encoding="utf-8-sig", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != ["S No.", "Title", "Decisions", "Words"]:
+            raise ValueError("Unexpected author-published SEntFiN columns.")
+        rows = list(reader)
+    records, excluded, seen_ids, fallbacks = [], [], set(), 0
+    for row in rows:
+        if (not isinstance(row.get("S No."), str) or not row["S No."].isdigit()
+                or row["S No."] in seen_ids or not isinstance(row.get("Title"), str) or not row["Title"].strip()):
+            raise ValueError("Invalid or duplicate SEntFiN source ID/text.")
+        seen_ids.add(row["S No."])
+        example_id = f"sentfin_{int(row['S No.']):05d}"
+        decisions, fallback = parse_sentfin_decisions(row["Decisions"])
+        fallbacks += fallback
+        if len(decisions) != 1:
+            excluded.append({"example_id": example_id, "reason": "multiple_entities", "targets": len(decisions)})
+            continue
+        target, label = next(iter(decisions.items()))
+        records.append({"example_id": example_id, "text": row["Title"], "original_text": row["Title"],
+                        "true_label": normalize_label(label), "original_label": label, "target": target,
+                        "original_decisions": row["Decisions"], "source_dataset": "sentfin", "split": "single_entity",
+                        "source_type": "financial_headline", "source_row": int(row["S No."])})
+    single_entity_count = len(records)
+    records, duplicate_exclusions = deduplicate(records)
+    excluded.extend(duplicate_exclusions)
+    references, reference_files = _external_references(root)
+    records, overlaps, overlap_counts = filter_reference_overlaps(records, references)
+    excluded.extend(overlaps)
+    within_near = near_duplicate_audit(records)
+    cross_near = near_duplicate_audit(records, references)
+    eligible_count = len(records)
+    eligible_counts = dict(Counter(row["true_label"] for row in records))
+    selected = stratified_sample(records, sample_size, seed)
+    selected_ids = {row["example_id"] for row in selected}
+    excluded.extend({"example_id": row["example_id"], "reason": "outside_fixed_stratified_sample"}
+                    for row in records if row["example_id"] not in selected_ids)
+    for row in selected:
+        row["split"] = f"single_entity_sample_{sample_size}_seed{seed}"
+    return EvaluationDataset(selected, {
+        "loaded_rows": len(rows), "single_entity_rows": single_entity_count, "filtered_eligible_rows": eligible_count,
+        "retained_rows": len(selected), "eligible_class_counts": eligible_counts,
+        "class_counts": dict(Counter(row["true_label"] for row in selected)), "sample_size": sample_size, "seed": seed,
+        "excluded": sorted(excluded, key=lambda row: row["example_id"]), "overlap": overlap_counts,
+        "restricted_decisions_parser_rows": fallbacks, "within_near_duplicates": within_near, "cross_reference_near_duplicates": cross_near,
+        "sample_near_duplicate_pairs": sum(pair["example_id"] in selected_ids and pair["reference_id"] in selected_ids
+                                           for pair in within_near["pairs"]),
+    }, {"dataset": "sentfin", "split": f"single_entity_sample_{sample_size}_seed{seed}", "revision": SENTFIN_REVISION,
+        "source_url": "https://github.com/pyRis/SEntFiN", "paper_url": "https://arxiv.org/html/2305.12257",
+        "license": "MIT in author repository; original news rights remain relevant; raw text kept local",
+        "role": "primary_external_sample", "annotation_method": "Three human MBA annotators, consensus and curator adjudication, documented by authors",
+        "label_mapping": "Original entity labels negative/neutral/positive; only single-entity headlines",
+        "collection_period": "2011-2015 (authors' annotated corpus; not the separate 2002-2017 news-flow corpus)",
+        "warning": f"A fixed {sample_size:,}-example external sample of human-labelled single-entity headlines, not the full dataset or an author-defined test split. Exact/normalized reference overlaps are excluded; pretraining/near-duplicate independence is not guaranteed.",
+        "retrieval_date": _retrieval_date(path.parent),
+        "sampling": "Proportional largest-remainder allocation by true class, seeded shuffle; no outcome-based selection",
+        "files": [_file_info(path), _file_info(root / "sentfin" / "LICENSE")] + reference_files})
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -317,17 +461,9 @@ def main(argv: list[str] | None = None) -> None:
     fetch.add_argument("--dataset", choices=tuple(SOURCES), required=True)
     fetch.add_argument("--data-dir", type=Path, default=Path("data/evaluation"))
     fetch.add_argument("--retrieval-date", default=date.today().isoformat())
-    annotations = subparsers.add_parser("prepare-annotations")
-    annotations.add_argument("--input", type=Path, required=True)
-    annotations.add_argument("--output", type=Path, required=True)
-    annotations.add_argument("--size", type=int, default=80)
-    annotations.add_argument("--seed", type=int, default=42)
     args = parser.parse_args(argv)
     try:
-        if args.command == "fetch":
-            result = fetch_dataset(args.dataset, args.data_dir, retrieval_date=args.retrieval_date)
-        else:
-            result = prepare_annotations(args.input, args.output, size=args.size, seed=args.seed)
+        result = fetch_dataset(args.dataset, args.data_dir, retrieval_date=args.retrieval_date)
     except (ValueError, OSError, zipfile.BadZipFile) as exc:
         parser.exit(2, f"Error: {exc}\n")
     print(json.dumps(result, sort_keys=True, indent=2))

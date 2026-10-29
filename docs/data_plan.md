@@ -258,7 +258,7 @@ redistribution artifacts merely because they were generated locally.
 ## Phase 5 labelled evaluation — implemented with limitations
 
 See the executed [evaluation protocol](evaluation_methodology.md),
-[findings](evaluation_findings.md), and [human annotation guide](annotation_guide.md).
+[findings](evaluation_findings.md), and [external dataset audit](external_benchmark_audit.md).
 The evaluation schema preserves `example_id`, `text`, `original_text`,
 `true_label`, `original_label`, `source_dataset`, `split` and available target/aspect
 and source-type metadata. Gold references remain separate from predictions.
@@ -281,13 +281,19 @@ and source-type metadata. Gold references remain separate from predictions.
   this remains an external-source candidate diagnostic, not guaranteed unseen
   generalization evidence. A check against PhraseBank 50Agree found no eligible
   FiQA text match; it cannot rule out near-duplicates or pretraining contamination.
-- Eighty original earnings units were sampled without consulting predictions,
-  but all human labels remain blank. No in-domain accuracy or annotation agreement
-  is claimed. The loader rejects pending annotations.
+- Phase 5B removes the abandoned earnings annotation workflow. No user-created or
+  AI-generated earnings references are used. Real earnings releases, metadata and
+  Phase 4 outputs remain available for descriptive analysis.
+- SEntFiN is the accepted external source: pinned author CSV, documented human
+  entity annotations and MIT licence. Only single-entity headlines are eligible;
+  exact/normalized reference overlap and duplicates are checked before a fixed
+  2,000-record proportional sample (seed 42). See the audit for all four candidate
+  decisions and limitations. No headline text is committed.
 
-Raw data, annotation text and generated reports stay in ignored
-`data/evaluation/` and `outputs/phase5/`. Only the metadata-only
-`data/evaluation_manifests/phase5_sources.json`, code and documentation are intended
-for Git. It records source URLs/revisions/hashes, retrieval dates and the pending
-annotation protocol. No dataset package, additional model or GPU dependency was
-installed. Demographic fairness metrics remain out of scope.
+Raw data and generated reports stay in ignored `data/evaluation/` and
+`outputs/phase5/` / `outputs/phase5b/`. Metadata-only manifests in
+`data/evaluation_manifests/` record source URLs, revisions, hashes, retrieval dates,
+selection rules and audit outcomes. The Phase 5 protocol hash refers to its
+historical commit; Phase 5B records its updated protocol separately. No dataset
+package, additional model or GPU dependency was installed. Demographic fairness
+metrics remain out of scope.

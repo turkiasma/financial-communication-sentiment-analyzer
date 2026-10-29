@@ -1,4 +1,4 @@
-# Phase 5 evaluation protocol, version 1
+# Evaluation protocol: Phase 5 and Phase 5B
 
 Protocol fixed before running benchmark inference on 2026-10-29. Neither model
 weights, score thresholds, keyword vocabulary nor subgroup cutoffs are fitted to
@@ -7,15 +7,18 @@ evaluation outcomes. The baseline vocabulary is fixed in
 
 ## Dataset roles and access
 
-- **Financial PhraseBank:** the `Sentences_AllAgree.txt` agreement subset only,
-  from [takala/financial_phrasebank](https://huggingface.co/datasets/takala/financial_phrasebank),
-  revision `8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964`. This is a descriptive
-  pipeline benchmark, **not independent held-out evidence**: the
-  [FinBERT authors](https://github.com/ProsusAI/finBERT) identify PhraseBank as
-  supervised training data. Do not pool overlapping agreement subsets. The
-  50-agreement subset may be used only to check known text overlap with FiQA.
-  The dataset identifies CC BY-NC-SA 3.0; source text stays local.
-- **FiQA:** the requested [TheFinAI dataset](https://huggingface.co/datasets/TheFinAI/fiqa-sentiment-classification)
+Only SEntFiN, FiQA and PhraseBank are supported by retrieval/evaluation CLIs.
+Their metrics are never combined into an overall score. Rejected candidates remain
+in the historical audit only; no runtime integrations or local downloads remain.
+
+- **Primary external benchmark — SEntFiN:** documented human entity labels from the author repository,
+  MIT licence, restricted to single-entity headlines. The pinned source, exact
+  schema, exclusions, reference overlap checks, bounded near-duplicate screen and
+  **2,000-example proportional sample, seed 42** were fixed before inference in
+  the [external audit](external_benchmark_audit.md). No official held-out partition
+  exists. This is primary external sample evidence, with unknown complete model
+  exposure and a headline/entity versus earnings/sentence task difference.
+- **Secondary diagnostic — FiQA:** the requested [TheFinAI dataset](https://huggingface.co/datasets/TheFinAI/fiqa-sentiment-classification)
   redirects to gated `TheFinAI/en-fiqa-absa`; it was not accessed through the gate.
   The [original organizer](https://sites.google.com/view/fiqa/home) defines target/
   aspect scores in [-1, 1] and restricts data to noncommercial use. Its train/test
@@ -31,10 +34,17 @@ evaluation outcomes. The baseline vocabulary is fixed in
   exposure is not established by its PhraseBank-focused model card. Consequently
   this is an external-source **candidate diagnostic**, not a proven independent
   generalization benchmark; prior research/model-selection exposure is possible.
-- **Earnings:** prepare 80 distinct examples from the existing eight releases,
-  stratified across documents with seed 42, without reading model predictions.
-  Human labels/reviewer fields start blank. Evaluation remains pending until the
-  user assigns/reviews all reference labels. FinBERT labels are never gold labels.
+- **Training-overlap diagnostic — Financial PhraseBank:** the `Sentences_AllAgree.txt` agreement subset only,
+  from [takala/financial_phrasebank](https://huggingface.co/datasets/takala/financial_phrasebank),
+  revision `8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964`. This is a descriptive
+  pipeline benchmark, **not independent held-out evidence**: the
+  [FinBERT authors](https://github.com/ProsusAI/finBERT) identify PhraseBank as
+  supervised training data. Do not pool overlapping agreement subsets. The
+  50-agreement subset is used as overlap-reference text for FiQA and SEntFiN.
+  The dataset identifies CC BY-NC-SA 3.0; source text stays local.
+- **Earnings:** descriptive quarterly inference only. The abandoned annotation
+  workflow has been removed; no user-created or AI-generated earnings gold labels
+  enter evaluation. Existing real releases, metadata and Phase 4 outputs are retained.
 
 ## FiQA mapping fixed before model results
 
@@ -60,7 +70,7 @@ case, Unicode NFKC and whitespace **only for duplicate detection**; infer on the
 original text. Identical text with matching labels keeps the lowest stable ID;
 conflicting labels exclude all copies, with each decision recorded. Invalid or
 missing text/labels cause errors, not guessed labels. Multi-target, overlap and
-duplicate exclusions are recorded with IDs and counts. Evaluate the two datasets
+duplicate exclusions are recorded with IDs and counts. Evaluate each dataset
 separately; no pooled score or merging of train/validation/test partitions.
 
 Overlong (>512 tokens including special tokens) examples are excluded from **both**
@@ -100,5 +110,6 @@ is not counted as measured accuracy.
 
 Raw data, annotation text and generated artifacts remain ignored by Git. Report
 text is omitted from error artifacts by default; `--include-text` is for local
-review subject to source terms. In-domain annotation and access-limited test-set
-evaluation must be reported as pending, not completed.
+review subject to source terms. No in-domain earnings accuracy is established.
+Access-limited test-set evaluation remains unavailable. External-source results do not prove absence of
+pretraining exposure or validate all earnings-report uses.

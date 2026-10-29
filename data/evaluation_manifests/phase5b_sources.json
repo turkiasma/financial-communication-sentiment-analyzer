@@ -1,0 +1,377 @@
+{
+  "candidates": [
+    {
+      "access_attempts": [
+        "Official dataset page, project home, final-report page, final-report PDF and results page inspected; no downloadable records or repository found",
+        "No access controls bypassed and no author contacted"
+      ],
+      "accessible": false,
+      "annotation_method": "Five finance students majority vote, publisher claim not record-verified",
+      "annotation_provenance_confidence": "method documented; actual records unverified",
+      "available_labels": "three classes claimed; records unavailable",
+      "collection_period": "not established",
+      "dataset": "arsd",
+      "duplicates": null,
+      "eligibility": "not_available",
+      "human_labelled": "claimed, not record-verified",
+      "known_training_overlap": null,
+      "licence": "No explicit data licence found",
+      "official_url": "https://wp2025.cs.hku.hk/fyp25036/datasets/",
+      "publication_date": "not established; project final report dated 2026-04-20",
+      "reason": "No downloadable records or explicit data licence found on the project site/report.",
+      "task_compatibility": "Potentially close: annual-report sentences, not verifiable without records",
+      "total_examples_claimed": 3000,
+      "uncertain_overlap": "Cannot inspect inaccessible text"
+    },
+    {
+      "accessible": true,
+      "annotation_method": "Unweighted maximum voting among yiyanghkust/finbert-tone, nickmuchi/finbert-tone-finetuned-fintwitter-classification, mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis; ties neutral; T5 paraphrase augmentation retains labels",
+      "annotation_provenance_confidence": "High: inspected original notebook JSON, cells 55-59 for voting; notebook not executed",
+      "audit": {
+        "class_counts": {
+          "Negative": 6130,
+          "Neutral": 6123,
+          "Positive": 6364
+        },
+        "conflicting_text_groups": 2937,
+        "exact_duplicate_extra_rows": 6423,
+        "fiqa_overlap": 0,
+        "headers": [
+          "Sno",
+          "Headlines",
+          "sentiment_label"
+        ],
+        "normalized_duplicate_extra_rows": 6433,
+        "phrasebank_overlap": 0,
+        "rows": 18617
+      },
+      "collection_period": "not established",
+      "dataset": "mendeley",
+      "doi": "10.17632/fk37gb6dmp.1",
+      "eligibility": "not_suitable",
+      "exact_ProsusAI_finbert_string_in_labelling_code": false,
+      "files": [
+        {
+          "bytes": 2344919,
+          "path": "data/evaluation/audit/mendeley/Data Labeling Code.ipynb",
+          "sha256": "bf4ab06ebac9dd5e0ffcceef93f73531ea3546b5e2fb68f2707959bc89a38456"
+        },
+        {
+          "bytes": 36338,
+          "path": "data/evaluation/audit/mendeley/Data_extraction code.ipynb",
+          "sha256": "91bfe2028ea34847b428fded772f7834c4eb80ff886b0b9e32465ec3c1bdd89a"
+        },
+        {
+          "bytes": 663900,
+          "path": "data/evaluation/audit/mendeley/final_sent_headline_df_Balanced.xlsx",
+          "sha256": "e3f281cc85289b3fa86be4f91f21cf1b1141dd3a1125f597b198c97f4a815ec9"
+        }
+      ],
+      "human_labelled": "no",
+      "licence": "CC BY 4.0; third-party news rights remain relevant",
+      "near_duplicate_assessment": "T5 paraphrase risk established; exhaustive semantic pair counts not computed for rejected corpus",
+      "official_url": "https://data.mendeley.com/datasets/fk37gb6dmp/1",
+      "publication_date": "2024-08-22",
+      "reason": "Model-generated voting labels include FinBERT variants and DistilRoBERTa; T5 paraphrase augmentation. Not independent human references.",
+      "source_news": "financialexpress.com/market",
+      "task_compatibility": "Headline polarity compatible in form; reference labels fail independent human ground-truth requirement"
+    },
+    {
+      "accessible": true,
+      "annotation_method": "Unverified; source card annotations_creators=other; no documented human procedure",
+      "annotation_provenance_confidence": "Insufficient to establish human gold; third-party model descriptions not accepted as proof",
+      "audit": {
+        "conflicting_text_groups": 0,
+        "exact_duplicate_extra_rows": 0,
+        "human_annotation": "unverified; source card annotations_creators=other",
+        "known_reference_normalized_matches": 0,
+        "normalized_duplicate_extra_rows": 7,
+        "split_counts": {
+          "train": {
+            "class_counts": {
+              "negative": 1442,
+              "neutral": 6178,
+              "positive": 1923
+            },
+            "rows": 9543
+          },
+          "validation": {
+            "class_counts": {
+              "negative": 347,
+              "neutral": 1566,
+              "positive": 475
+            },
+            "rows": 2388
+          }
+        },
+        "total_rows": 11931,
+        "train_validation_shared_normalized_texts": 1
+      },
+      "collection_period": "not documented in source card",
+      "columns": [
+        "text",
+        "label"
+      ],
+      "dataset": "tfns",
+      "eligibility": "diagnostic_only",
+      "files": [
+        {
+          "bytes": 1390,
+          "path": "data/evaluation/tfns/README.md",
+          "sha256": "8dd3a8a9c680c8bb6fdd6f3f329b2fb619a64260cd429db05ff304b68b7f533b"
+        },
+        {
+          "bytes": 48,
+          "path": "data/evaluation/tfns/sent_dataset_meta.txt",
+          "sha256": "692912b7642fe23ace6e26cd4461e21614793eddf2f39ee1df6bff06141bc799"
+        },
+        {
+          "bytes": 858645,
+          "path": "data/evaluation/tfns/sent_train.csv",
+          "sha256": "71aa99d0d37feced03c999ec23b5b25302c92f39d69b6acb0a37aa076c5420e8"
+        },
+        {
+          "bytes": 217378,
+          "path": "data/evaluation/tfns/sent_valid.csv",
+          "sha256": "31ea8274c98b52212daa68f2fb962811bf1913c1efe51b99765c8e2311806de6"
+        }
+      ],
+      "human_labelled": "unverified",
+      "label_mapping": {
+        "0": "negative (bearish)",
+        "1": "positive (bullish)",
+        "2": "neutral"
+      },
+      "licence": "MIT in source card",
+      "near_duplicate_assessment": "No exhaustive semantic screen; normalized duplicates and cross-split text checked; not selected",
+      "official_url": "https://huggingface.co/datasets/zeroshot/twitter-financial-news-sentiment",
+      "publication_date": "Not used as evidence of independence",
+      "reason": "Source card does not establish a human annotation procedure; not selected as primary ground truth.",
+      "revision": "ccbe24de388e287beb92dd393a335c376b350ac3",
+      "task_compatibility": "Financial social-media polarity, meaningful domain difference from annual reports"
+    },
+    {
+      "accessible": true,
+      "annotation_method": "Three human MBA annotators, consensus and curator adjudication, documented by authors",
+      "annotation_provenance_confidence": "Documented by author paper section 3.1; not a new independent reannotation",
+      "audit": {
+        "class_counts": {
+          "negative": 602,
+          "neutral": 677,
+          "positive": 721
+        },
+        "cross_reference_near_duplicates": {
+          "candidate_comparisons": 672086,
+          "method": "bounded word-set Jaccard >=0.9; report only, not exhaustive",
+          "pairs": [],
+          "truncated": false
+        },
+        "eligible_class_counts": {
+          "negative": 2363,
+          "neutral": 2654,
+          "positive": 2829
+        },
+        "filtered_eligible_rows": 7846,
+        "loaded_rows": 10753,
+        "overlap": {
+          "exact_matches": 0,
+          "normalized_only_matches": 0,
+          "reference_rows": 6151
+        },
+        "restricted_decisions_parser_rows": 13,
+        "retained_rows": 2000,
+        "sample_near_duplicate_pairs": 0,
+        "sample_size": 2000,
+        "seed": 42,
+        "single_entity_rows": 7906,
+        "within_near_duplicates": {
+          "candidate_comparisons": 620919,
+          "method": "bounded word-set Jaccard >=0.9; report only, not exhaustive",
+          "pairs": [
+            {
+              "example_id": "sentfin_00753",
+              "reference_id": "sentfin_00752",
+              "word_set_jaccard": 0.9285714285714286
+            },
+            {
+              "example_id": "sentfin_00767",
+              "reference_id": "sentfin_00766",
+              "word_set_jaccard": 0.9090909090909091
+            },
+            {
+              "example_id": "sentfin_01142",
+              "reference_id": "sentfin_01141",
+              "word_set_jaccard": 0.9166666666666666
+            },
+            {
+              "example_id": "sentfin_06016",
+              "reference_id": "sentfin_00556",
+              "word_set_jaccard": 0.9
+            },
+            {
+              "example_id": "sentfin_06074",
+              "reference_id": "sentfin_00609",
+              "word_set_jaccard": 0.9
+            },
+            {
+              "example_id": "sentfin_06216",
+              "reference_id": "sentfin_00769",
+              "word_set_jaccard": 1.0
+            },
+            {
+              "example_id": "sentfin_06331",
+              "reference_id": "sentfin_00897",
+              "word_set_jaccard": 0.9090909090909091
+            },
+            {
+              "example_id": "sentfin_06431",
+              "reference_id": "sentfin_01018",
+              "word_set_jaccard": 0.9090909090909091
+            },
+            {
+              "example_id": "sentfin_06598",
+              "reference_id": "sentfin_01173",
+              "word_set_jaccard": 1.0
+            },
+            {
+              "example_id": "sentfin_06783",
+              "reference_id": "sentfin_01322",
+              "word_set_jaccard": 0.9333333333333333
+            },
+            {
+              "example_id": "sentfin_06839",
+              "reference_id": "sentfin_01371",
+              "word_set_jaccard": 0.9333333333333333
+            },
+            {
+              "example_id": "sentfin_07771",
+              "reference_id": "sentfin_02225",
+              "word_set_jaccard": 0.9166666666666666
+            },
+            {
+              "example_id": "sentfin_09151",
+              "reference_id": "sentfin_09150",
+              "word_set_jaccard": 0.9090909090909091
+            },
+            {
+              "example_id": "sentfin_09750",
+              "reference_id": "sentfin_04300",
+              "word_set_jaccard": 0.9230769230769231
+            },
+            {
+              "example_id": "sentfin_09956",
+              "reference_id": "sentfin_04555",
+              "word_set_jaccard": 0.9166666666666666
+            }
+          ],
+          "truncated": false
+        }
+      },
+      "collection_period": "2011-2015 annotated corpus (not separate 2002-2017 newsflow)",
+      "columns": [
+        "S No.",
+        "Title",
+        "Decisions",
+        "Words"
+      ],
+      "dataset": "sentfin",
+      "eligibility": "primary_external_sample",
+      "exclusion_reason_counts": {
+        "conflicting_reference_labels": 16,
+        "duplicate_text": 44,
+        "multiple_entities": 2847,
+        "outside_fixed_stratified_sample": 5846
+      },
+      "human_labelled": "yes, documented in authors' paper",
+      "known_training_overlap": "Zero exact/normalized matches in 6151 accessible PhraseBank50Agree + FiQA train/test reference rows",
+      "licence": "MIT, author repository; keep original news text local",
+      "official_url": "https://github.com/pyRis/SEntFiN",
+      "provenance": {
+        "annotation_method": "Three human MBA annotators, consensus and curator adjudication, documented by authors",
+        "collection_period": "2011-2015 (authors' annotated corpus; not the separate 2002-2017 news-flow corpus)",
+        "dataset": "sentfin",
+        "files": [
+          {
+            "bytes": 1118162,
+            "path": "data/evaluation/sentfin/SEntFiN.csv",
+            "sha256": "570af7ba58f724f3fcc414dd5ba80da5b1a3b342134d76c6ebdf53a32c54a92f"
+          },
+          {
+            "bytes": 1110,
+            "path": "data/evaluation/sentfin/LICENSE",
+            "sha256": "961d32986ac3fa2fe2e55ebc7bbae1ba8d632412e98493d73bdf59f0ad8fc65f"
+          },
+          {
+            "bytes": 681890,
+            "path": "data/evaluation/phrasebank/FinancialPhraseBank-v1.0.zip",
+            "sha256": "0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6"
+          },
+          {
+            "bytes": 151039,
+            "path": "data/evaluation/fiqa/task1_headline_ABSA_train.json",
+            "sha256": "24bfd3dd662a22c95dbe2d2c86ac2ea75408dafb1027246ed27b53b5c7bad821"
+          },
+          {
+            "bytes": 21219,
+            "path": "data/evaluation/fiqa/task1_headline_ABSA_test.json",
+            "sha256": "a5ab90b9c6b5768a199bb1ffd377fa809af3e1418b2df6bf3f19123f10d7eb85"
+          },
+          {
+            "bytes": 227069,
+            "path": "data/evaluation/fiqa/task1_post_ABSA_train.json",
+            "sha256": "7a6490b1b765ac74a8933355d482c3ce7994780b2d961027d4b28a9c751b4998"
+          },
+          {
+            "bytes": 22626,
+            "path": "data/evaluation/fiqa/task1_post_ABSA_test.json",
+            "sha256": "bc734a2bf3cc6ef37a28b3e249305607f04d4085b1cce5a0e2cdcc71c69ffaa8"
+          }
+        ],
+        "label_mapping": "Original entity labels negative/neutral/positive; only single-entity headlines",
+        "license": "MIT in author repository; original news rights remain relevant; raw text kept local",
+        "paper_url": "https://arxiv.org/html/2305.12257",
+        "retrieval_date": "2026-10-29",
+        "revision": "eba43610fe3cb57a3e5773cd6c037da1f8992ad5",
+        "role": "primary_external_sample",
+        "sampling": "Proportional largest-remainder allocation by true class, seeded shuffle; no outcome-based selection",
+        "source_url": "https://github.com/pyRis/SEntFiN",
+        "split": "single_entity_sample_2000_seed42",
+        "warning": "A fixed 2,000-example external sample of human-labelled single-entity headlines, not the full dataset or an author-defined test split. Exact/normalized reference overlaps are excluded; pretraining/near-duplicate independence is not guaranteed."
+      },
+      "publication_date": "Repository created 2021-06-14; paper posted 2023-05-20; dates do not prove independence",
+      "reason": "Author-published MIT-licensed human entity labels; evaluate only single-entity records after overlap checks. No guarantee of all pretraining independence.",
+      "task_compatibility": "Single-entity headline restriction minimizes target/sentence mismatch; no official test partition; not quarterly annual-report validation",
+      "uncertain_overlap": "No complete pretraining audit or exhaustive semantic guarantee; original study trained a different finBERT model"
+    }
+  ],
+  "candidates_investigated": 4,
+  "checked_date": "2026-10-29",
+  "cleanup": {
+    "historical_candidate_file_metadata_retained": true,
+    "note": "Rejected-candidate file paths/hashes document the investigation; these files were removed during finalization and are not required by evaluation.",
+    "rejected_candidate_downloads_removed": true,
+    "supported_datasets": [
+      "sentfin",
+      "fiqa",
+      "phrasebank"
+    ]
+  },
+  "fallback_candidates": 2,
+  "limitations": [
+    "PhraseBank known fine-tuning overlap; FiQA diagnostic uncertain exposure",
+    "No exact or normalized match does not establish absence of unseen training/pretraining exposure",
+    "Bounded near-duplicate audit is report-only, not exhaustive",
+    "No user-created or AI-generated earnings reference labels are used"
+  ],
+  "phase5_commit": "2d545ab02c5c3f4012b7bc6f019bee9cca827789",
+  "selection_protocol": {
+    "baseline_source_sha256": "3689e2744fe701aa3130dcac3091a831a6b702c3659e40b563e8e3e3d462f288",
+    "baseline_version": "keyword_v1",
+    "dataset": "sentfin",
+    "method": "Proportional largest-remainder allocation by true class, seeded shuffle; no outcome-based selection",
+    "no_tuning": true,
+    "protocol_sha256": "817624f3a994efc6c21585d94c6874c31115276455f7cebf7cb006c4db9aacbd",
+    "sample_size": 2000,
+    "seed": 42
+  }
+}

@@ -189,6 +189,23 @@ def test_cache_cli_avoids_loading_model(cohort, cache, tmp_path, monkeypatch, ca
     assert "N=4" in capsys.readouterr().out
 
 
+def test_abandoned_earnings_options_removed(tmp_path, capsys):
+    for args in (["--dataset", "earnings"], ["--dataset", "fiqa", "--annotations", "obsolete.csv"]):
+        with pytest.raises(SystemExit) as error:
+            main([*args, "--output-dir", str(tmp_path / "out")])
+        assert error.value.code == 2
+    capsys.readouterr()
+
+
+def test_external_artifacts_reuse_existing_metrics(cohort, cache, tmp_path):
+    result = score_evaluation(cohort, cache)
+    result["dataset"]["role"] = "primary_external_sample"  # Original synthetic export contract only.
+    export_evaluation(result, cache, tmp_path)
+    assert (tmp_path / "external_evaluation_metrics.csv").read_bytes() == (tmp_path / "evaluation_metrics.csv").read_bytes()
+    assert (tmp_path / "external_evaluation_metrics.json").read_bytes() == (tmp_path / "evaluation_metrics.json").read_bytes()
+    assert (tmp_path / "external_evaluation_report.md").exists()
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(os.environ.get("RUN_FINBERT_INTEGRATION") != "1", reason="Requires cached FinBERT.")
 def test_cached_model_labelled_evaluation(cached_analyzer, cohort, tmp_path):
@@ -212,3 +229,21 @@ def test_small_genuine_labelled_sample(cached_analyzer):
     result = score_evaluation(dataset, cache)
     assert result["models"]["finbert"]["sample_size"] == 6
     assert sum(map(sum, result["models"]["finbert"]["confusion_matrix"])) == 6
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.environ.get("RUN_FINBERT_INTEGRATION") != "1", reason="Requires cached FinBERT and local external source files.")
+def test_genuine_sentfin_adapter_through_external_reports(cached_analyzer, tmp_path):
+    from src.evaluation_data import load_sentfin
+    required = [Path("data/evaluation/sentfin/SEntFiN.csv"), Path("data/evaluation/sentfin/LICENSE"),
+                Path("data/evaluation/phrasebank/FinancialPhraseBank-v1.0.zip")]
+    required += [Path("data/evaluation/fiqa") / f"task1_{kind}_ABSA_{split}.json"
+                 for kind in ("headline", "post") for split in ("train", "test")]
+    if any(not path.exists() for path in required):
+        pytest.skip("Explicitly fetch SEntFiN and reference corpora first; tests never download data.")
+    data = load_sentfin("data/evaluation", sample_size=6)
+    cache = infer_examples(data, analyzer=cached_analyzer, batch_size=2)
+    result = score_evaluation(data, cache)
+    assert result["models"]["finbert"]["sample_size"] == result["models"]["keyword_v1"]["sample_size"] == 6
+    export_evaluation(result, cache, tmp_path / "external")
+    assert (tmp_path / "external" / "external_evaluation_metrics.json").exists()

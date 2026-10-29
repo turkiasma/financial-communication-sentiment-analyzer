@@ -5,28 +5,9 @@
     "Participant test inputs contain no reference scores; no held-out test metric is claimed",
     "FinBERT paper also used FiQA regression experiments; released classifier exposure unverified"
   ],
-  "annotation": {
-    "distinct_source_texts": 119,
-    "duplicates_not_sampled": 9,
-    "per_document": {
-      "aapl_fy2025_q1": 10,
-      "aapl_fy2025_q2": 10,
-      "aapl_fy2025_q3": 8,
-      "aapl_fy2025_q4": 10,
-      "msft_fy2025_q1": 11,
-      "msft_fy2025_q2": 11,
-      "msft_fy2025_q3": 10,
-      "msft_fy2025_q4": 10
-    },
-    "presentation_seed": 43,
-    "sample_size": 80,
-    "seed": 42,
-    "source_units": 128,
-    "status": "pending human review",
-    "template_sha256": "af813c0c52785ca66323ef4a949dd4405241c803ece311b023b58e7d31aa02b4"
-  },
   "baseline_source_sha256": "3689e2744fe701aa3130dcac3091a831a6b702c3659e40b563e8e3e3d462f288",
-  "protocol_sha256": "9746c4a8c25f968d2d5d2841919217ebd258e6ad90650b739ddb9de0e0f6679d",
+  "historical_note": "The unlabelled earnings-template workflow from Phase 5 was abandoned and removed in Phase 5B. No earnings gold labels or evaluation were produced.",
+  "protocol_sha256_at_phase5_commit": "9746c4a8c25f968d2d5d2841919217ebd258e6ad90650b739ddb9de0e0f6679d",
   "protocol_version": "phase5_v1",
   "retrievals": [
     {

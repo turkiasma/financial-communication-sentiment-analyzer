@@ -2,17 +2,18 @@
 
 import csv
 import json
+import hashlib
 from pathlib import Path
 import zipfile
 
 import pytest
 
 from src.evaluation_data import (
-    deduplicate, fiqa_label, load_annotations, load_fiqa, load_phrasebank,
-    normalize_label, prepare_annotations, validate_examples,
+    deduplicate, fiqa_label, load_fiqa, load_phrasebank,
+    normalize_label, validate_examples,
+    parse_sentfin_decisions, load_sentfin,
+    filter_reference_overlaps, near_duplicate_audit, stratified_sample,
 )
-from src.ingestion import load_document
-from src.preprocessing import preprocess_document, write_jsonl
 
 
 def example(identifier="one", text="Original financial statement.", label="neutral"):
@@ -149,27 +150,105 @@ def test_invalid_fiqa_structure(tmp_path, invalid):
         load_fiqa(tmp_path)
 
 
-def test_blind_annotation_sample_pending_and_review_gate(tmp_path):
-    fixture = Path(__file__).parent / "fixtures" / "synthetic_earnings.json"
-    records = preprocess_document(load_document(fixture), token_counter=lambda text: len(text.split()) + 2)
-    source = tmp_path / "source.jsonl"
-    write_jsonl(records, source)
-    first, second = tmp_path / "first.csv", tmp_path / "second.csv"
-    audit = prepare_annotations(source, first, size=3, seed=42)
-    prepare_annotations(source, second, size=3, seed=42)
-    assert first.read_bytes() == second.read_bytes()
-    assert audit["selected"] == 3 and audit["annotation_status"] == "pending"
-    with first.open() as stream:
-        rows = list(csv.DictReader(stream))
-    assert all(not row["human_label"] and row["review_status"] == "pending" for row in rows)
-    assert not ({"predicted_sentiment", "prob_positive", "prob_negative", "prob_neutral"} & rows[0].keys())
-    with pytest.raises(ValueError, match="pending"):
-        load_annotations(first)
-    for row in rows:  # Synthetic contract test; no real human annotations are claimed.
-        row.update(human_label="neutral", annotator_id="synthetic_test", review_status="reviewed")
-    reviewed = tmp_path / "reviewed.csv"
-    with reviewed.open("w", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
-    assert len(load_annotations(reviewed).records) == 3
-    with pytest.raises(FileExistsError):
-        prepare_annotations(source, first, size=3)
+@pytest.mark.parametrize("raw,expected,fallback", [
+    ("{'Example': 'positive'}", {"Example": "positive"}, False),
+    ("{'O'Brien': 'negative'}", {"O'Brien": "negative"}, True),
+    ('{"Dr Reddy\'s": \'neutral\', \'Example\': \'positive\'}', {"Dr Reddy's": "neutral", "Example": "positive"}, False),
+])
+def test_actual_decisions_grammar(raw, expected, fallback):
+    assert parse_sentfin_decisions(raw) == (expected, fallback)
+
+
+@pytest.mark.parametrize("raw", ["{}", "[]", "{'Example': 'unknown'}", "{'Example': 1}",
+                                "{'A': 'positive', 'A': 'negative'}", "{'': 'positive'}",
+                                "{'Example': __import__('os').getcwd()}", "{'O'Brien': 'positive' trailing}"])
+def test_invalid_decisions_never_guessed_or_executed(raw):
+    with pytest.raises(ValueError):
+        parse_sentfin_decisions(raw)
+
+
+def test_exact_and_normalized_reference_overlap():
+    records = [example("one", "Revenue grew."), example("two", "  REVENUE  grew. "), example("three", "Different statement.")]
+    retained, excluded, counts = filter_reference_overlaps(records, [{"example_id": "ref", "text": "Revenue grew."}])
+    assert [row["example_id"] for row in retained] == ["three"]
+    assert counts["exact_matches"] == counts["normalized_only_matches"] == 1
+    assert [row["reason"] for row in excluded] == ["exact_reference_overlap", "normalized_reference_overlap"]
+
+
+def test_near_duplicate_screen_reports_without_changing_text():
+    records = [example("one", "Revenue grew strongly in Europe."),
+               example("two", "Revenue strongly grew in Europe."),
+               example("three", "Revenue did not grow in Europe.")]
+    audit = near_duplicate_audit(records)
+    assert audit["pairs"] == [{"example_id": "two", "reference_id": "one", "word_set_jaccard": 1.0}]
+    assert len(records) == 3 and "not" in records[2]["text"]
+    assert near_duplicate_audit(records) == audit
+
+
+def test_stratified_sampling_preserves_proportions_and_order():
+    records = [example(f"id{i:02}", f"Original unique statement {i}.", label)
+               for i, label in enumerate(["negative"] * 3 + ["neutral"] * 6 + ["positive"] * 3)]
+    sample = stratified_sample(records, 8, seed=42)
+    assert {label: sum(r["true_label"] == label for r in sample) for label in ("negative", "neutral", "positive")} == {
+        "negative": 2, "neutral": 4, "positive": 2}
+    assert stratified_sample(list(reversed(records)), 8, seed=42) == sample
+    with pytest.raises(ValueError):
+        stratified_sample(records, 13)
+
+
+def sentfin_fixture(root, monkeypatch):
+    phrasebank_fixture(root);fiqa_fixture(root)
+    folder = root / "sentfin";folder.mkdir()
+    rows = [
+        (1, "Revenue grew.", "{'Example': 'positive'}"),
+        (2, "The board met.", "{'Example': 'neutral'}"),
+        (3, "Expenses harmed margins.", "{'Example': 'negative'}"),
+        (4, "Mixed targets.", "{'Example': 'positive', 'Regulator': 'neutral'}"),
+        (5, "REVENUE  grew.", "{'Example': 'positive'}"),
+        (6, "Known overlap.", "{'Example': 'neutral'}"),
+        (7, "Income fell sharply.", "{'Example': 'negative'}"),
+        (8, "A new filing appeared.", "{'Example': 'neutral'}"),
+    ]
+    path = folder / "SEntFiN.csv"
+    with path.open("w", newline="") as stream:
+        writer = csv.writer(stream);writer.writerow(["S No.", "Title", "Decisions", "Words"])
+        writer.writerows((i, text, decisions, len(text.split())) for i, text, decisions in rows)
+    (folder / "LICENSE").write_text("Synthetic fixture licence text; not a real dataset.")
+    monkeypatch.setattr("src.evaluation_data.SENTFIN_SHA256", hashlib.sha256(path.read_bytes()).hexdigest())
+    return path
+
+
+def test_sentfin_adapter_audit_and_provenance(tmp_path, monkeypatch):
+    sentfin_fixture(tmp_path, monkeypatch)
+    data = load_sentfin(tmp_path, sample_size=3)
+    assert len(data.records) == 3 and data.audit["loaded_rows"] == 8
+    assert data.audit["single_entity_rows"] == 7 and data.audit["filtered_eligible_rows"] == 5
+    assert data.audit["class_counts"] == {"negative": 1, "neutral": 1, "positive": 1}
+    assert data.provenance["role"] == "primary_external_sample"
+    assert data.provenance["revision"] and data.provenance["files"][0]["sha256"]
+    assert data.audit["overlap"]["exact_matches"] == 1
+    assert all(record["original_decisions"] and record["target"] for record in data.records)
+    assert load_sentfin(tmp_path, sample_size=3).records == data.records
+
+
+def test_sentfin_requires_pinned_dataset_identity(tmp_path, monkeypatch):
+    path = sentfin_fixture(tmp_path, monkeypatch)
+    path.write_text(path.read_text() + "invalid row\n")
+    with pytest.raises(ValueError, match="pinned"):
+        load_sentfin(tmp_path, sample_size=3)
+
+
+@pytest.mark.parametrize("field,value", [("Title", ""), ("Decisions", ""), ("Decisions", "{'Example': ''}")])
+def test_sentfin_rejects_missing_text_or_reference_labels(tmp_path, monkeypatch, field, value):
+    path = sentfin_fixture(tmp_path, monkeypatch)
+    with path.open(newline="") as stream:
+        reader = csv.DictReader(stream)
+        fields, rows = reader.fieldnames, list(reader)
+    rows[0][field] = value
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    monkeypatch.setattr("src.evaluation_data.SENTFIN_SHA256", hashlib.sha256(path.read_bytes()).hexdigest())
+    with pytest.raises(ValueError):
+        load_sentfin(tmp_path, sample_size=3)
