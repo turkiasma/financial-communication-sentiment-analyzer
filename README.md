@@ -2,9 +2,11 @@
 
 A Python backend NLP project exploring how financial-domain NLP can help analyze
 and compare corporate communication sentiment across reporting periods.
-**Phases 1–4 are implemented:** local FinBERT inference, English TXT ingestion,
+**Phases 1–5 are implemented:** local FinBERT inference, English TXT ingestion,
 sentence preprocessing with provenance, CPU batch predictions and descriptive
-quarterly sentiment comparison on eight real earnings-release excerpts.
+quarterly sentiment comparison on eight real earnings-release excerpts, plus
+labelled-data evaluation, a fixed baseline and descriptive robustness analysis.
+Independent earnings annotation and a verified FiQA held-out test remain pending.
 This is a portfolio/research project, not a trading,
 stock-prediction or financial recommendation system.
 
@@ -14,7 +16,7 @@ stock-prediction or financial recommendation system.
 2. **Financial document ingestion and preprocessing — implemented.**
 3. **Batch sentiment inference and structured prediction export — implemented.**
 4. **Reporting-period sentiment aggregation and comparison — implemented.**
-5. Dataset-based evaluation and robustness analysis — planned.
+5. **Dataset-based evaluation and robustness analysis — implemented, with access/annotation limitations below.**
 6. Final research reports and portfolio documentation — planned.
 
 ## Structure
@@ -25,6 +27,9 @@ src/inference.py         Reusable CPU classifier and five-sentence terminal demo
 src/batch_inference.py   Validated JSONL input, CPU batches and prediction JSONL CLI
 src/analysis.py          Model-free quarterly summaries, comparisons and reports
 src/records.py           Shared record validation and strict JSONL reader
+src/evaluation_data.py   Pinned-file retrieval, labelled loaders/audits and blind annotation sample
+src/evaluation.py        Three-class metrics, cache-only CPU evaluation, errors and subgroups
+src/evaluation_baseline.py  Original frozen keyword baseline, no fitting/download
 src/model_config.py      Shared pinned model/tokenizer settings
 src/ingestion.py         JSON metadata validation and UTF-8 TXT loading
 src/preprocessing.py     Sentence records, token-length checks and JSONL CLI
@@ -33,10 +38,14 @@ tests/test_ingestion.py  Ingestion and metadata validation tests
 tests/test_preprocessing.py  Segmentation, provenance, length policy and CLI tests
 tests/test_batch_inference.py  Batch validation, metadata, long inputs and integration tests
 tests/test_analysis.py   Known arithmetic, coverage, fiscal ordering, exports and end-to-end checks
+tests/test_evaluation*.py  Dataset, baseline, metrics, cache, subgroup and integration tests
 tests/conftest.py        Single shared cached model for opt-in integration tests
 tests/fixtures/          Original fictional earnings text and matching metadata
 data/metadata/          Eight verified real-release metadata files; no release text
 docs/data_plan.md        Verified source shortlist and future evaluation input plan
+docs/evaluation_methodology.md  Fixed protocol, mappings, contamination/access limitations
+docs/annotation_guide.md Human reference-label instructions; annotation remains pending
+docs/evaluation_findings.md  Actual executed benchmark results and limitations
 pytest.ini              Test discovery and integration marker
 requirements.txt        Direct dependencies pinned to the verified environment
 .gitignore              Environment, cache and generated-file exclusions
@@ -54,7 +63,7 @@ python -c "import torch, transformers; print(torch.__version__, transformers.__v
 
 The existing environment was verified with Python 3.14.7, PyTorch 2.14.1+cpu,
 Transformers 5.20.2, NumPy 2.5.4 and pytest 9.1.1. It also contains pandas,
-scikit-learn and NLTK; Phase 1 does not need them. No packages need to be installed
+scikit-learn 1.9.1 and NLTK; Phase 5 reuses scikit-learn for metrics. No packages need to be installed
 in the existing environment. The separate `.venv` directory is not used.
 
 For a **new environment only**, install the pinned dependencies after activating
@@ -289,7 +298,8 @@ provenance recommendations and future labelled-data input planning. Phase 3 real
 source text and predictions are local, ignored files; no third-party text is
 tracked in Git. Publicly readable documents are not assumed redistributable. The supplied FiQA URL now
 redirects to a gated aspect-based dataset; its actual schema and mapping must be
-inspected in Phase 5. No evaluation adapter or metrics are implemented.
+inspected before any gated-version evaluation. Phase 5 below documents the
+accessible original-format alternative and its implemented evaluation framework.
 
 ## Phase 3: CPU batch sentiment inference
 
@@ -525,14 +535,148 @@ incompatible inputs, skipped/zero-classified groups, deterministic exports and
 synthetic plus real eight-release workflows. Real-source tests skip explicitly on
 a fresh clone lacking the ignored TXT files; no automated test accesses the web.
 
+## Phase 5: labelled evaluation and robustness
+
+`src.evaluation_data` retrieves small pinned files explicitly and loads/audits
+genuine references. `src.evaluation` reuses the existing strict CPU classifier,
+scores FinBERT and the fixed `keyword_v1` baseline on identical examples, and
+exports metrics, errors and subgroups. Saved predictions can be rescored without
+loading a model. No fitting, extra model, paid API or package installation was used.
+Existing scikit-learn 1.9.1 supplies metrics; `datasets` and `pyarrow` are not needed.
+
+Read [the protocol](docs/evaluation_methodology.md),
+[executed findings](docs/evaluation_findings.md), and
+[annotation guide](docs/annotation_guide.md). Source revisions, retrieval dates,
+file hashes and baseline/protocol hashes are in
+`data/evaluation_manifests/phase5_sources.json`. Raw data, human annotation text
+and generated artifacts remain ignored by Git.
+
+### Datasets, mappings and independence limitations
+
+| Cohort actually evaluated | N | Negative / neutral / positive support |
+| --- | --- | --- |
+| Financial PhraseBank AllAgree | 2,259 | 303 / 1,386 / 570 |
+| FiQA original labelled train, single-target | 1,052 | 331 / 74 / 647 |
+
+PhraseBank's original archive has 2,264 AllAgree rows; five duplicates were removed.
+**It overlaps FinBERT training and is not an independent held-out benchmark.**
+No overlapping agreement subsets were pooled into the evaluation.
+
+The requested FiQA repository is access-gated, and original organizer downloads
+returned 404. The actual accessible files come from a pinned FiQA participant
+repository: labelled training data and 192 **unlabelled** test inputs. The latter
+have no sentiment scores; this run is an original-train diagnostic, not the gated
+publisher's 234-item test split. The original FinBERT paper also used FiQA
+regression experiments, so the current classifier's exact FiQA exposure is unknown.
+**Proven independent unseen-data performance has not been established.**
+
+FiQA's continuous scores use the published PIXIU mapping, fixed before results:
+**score < -0.1 → negative; -0.1 <= score < 0.1 → neutral; score >= 0.1 → positive**.
+Sixty multi-target sentences are excluded because FinBERT is sentence-level;
+one train/test text overlap is excluded. No eligible overlap was found against
+PhraseBank 50Agree text. These checks do not rule out near-duplicates, pretraining
+contamination or prior research exposure. This classification diagnostic differs
+from the original target/aspect regression task.
+
+Records preserve `example_id`, `text`, `original_text`, `true_label`,
+`original_label`, `source_dataset`, `split` and available source/target/aspect
+metadata. Unknown labels and missing text/references cause errors. Duplicate
+detection uses case/Unicode/whitespace normalization only; inference uses the
+original text. Same-label duplicates keep the lowest stable ID; conflicting
+references exclude all copies with recorded reasons. Overlong inputs are excluded
+from both models without truncation; neither actual run had length exclusions.
+
+### Obtain data and run
+
+Retrieval is explicit, about 1.1 MB total, with no model download. Skip fetch on
+this laptop when files already exist; loaders never download automatically:
+
+```bash
+source .venv-finsentiment/bin/activate
+python -m src.evaluation_data fetch --dataset phrasebank
+python -m src.evaluation_data fetch --dataset fiqa
+
+python -m src.evaluation --dataset phrasebank --split allagree \
+  --output-dir outputs/phase5/my_phrasebank --local-files-only
+
+python -m src.evaluation --dataset fiqa --split train \
+  --phrasebank-reference data/evaluation/phrasebank/FinancialPhraseBank-v1.0.zip \
+  --output-dir outputs/phase5/my_fiqa --local-files-only
+```
+
+Use fresh output directories. Add `HF_HUB_OFFLINE=1` for offline inference.
+Batch size defaults to 8, configurable with `--batch-size`; the Python API accepts
+one existing analyzer for multiple datasets, as used in the actual combined run.
+
+### Metrics and actual outcomes
+
+Metrics include accuracy, class precision/recall/F1/support, macro precision/
+recall/F1, weighted F1, predicted distributions and confusion matrices. Fixed
+label order is **negative, neutral, positive**; matrix rows are truth and columns
+prediction. Macro averages include all three labels, with zero division set to 0.
+The original keyword baseline has a fixed vocabulary, three-word negation scope
+and neutral ties; it was not tuned on results and is not a state-of-the-art model.
+
+| Cohort | Model | Accuracy | Macro F1 | Weighted F1 |
+| --- | --- | --- | --- | --- |
+| PhraseBank AllAgree (N=2,259) | FinBERT | 0.9717 | 0.9625 | 0.9720 |
+| PhraseBank AllAgree (N=2,259) | keyword_v1 | 0.8039 | 0.7223 | 0.7925 |
+| FiQA original train (N=1,052) | FinBERT | 0.4990 | 0.4765 | 0.5804 |
+| FiQA original train (N=1,052) | keyword_v1 | 0.3051 | 0.3188 | 0.3883 |
+
+On FiQA, 322 positive references became neutral predictions; neutral F1 is 0.1789.
+There were 125 incorrect predictions with confidence >=0.9. Headline accuracy was
+0.6233 (N=377), versus 0.4296 for posts (N=675). Subgroups also cover true class,
+<=20/>20 words, lexical negation and fixed confidence bins, with sizes, supports
+and warnings for small/class-incomplete groups. Differences are descriptive, not
+significance tests, causal explanations or demographic fairness measurements.
+High confidence is not proof of correctness. The operating-expenses demo remains
+unlabelled and is not counted as measured error evidence.
+
+### Reports, reproduction and human labels
+
+Actual artifacts are in `outputs/phase5/phrasebank/` and `outputs/phase5/fiqa/`:
+`evaluation_metrics.json`, `evaluation_metrics.csv`, `confusion_matrix.csv`,
+`error_analysis.csv`, `robustness_summary.csv`, `evaluation_report.md`, plus
+`excluded_examples.csv` and the cohort-bound `model_predictions.json` cache.
+Error text is omitted by default; `--include-text` is for local review subject to
+source terms. Objective error-pattern tags are co-occurrences, not proven causes.
+
+All eight artifacts per dataset reproduced byte-for-byte by rescoring saved
+predictions against the same references. This mode does not load FinBERT:
+
+```bash
+python -m src.evaluation --dataset fiqa --split train \
+  --phrasebank-reference data/evaluation/phrasebank/FinancialPhraseBank-v1.0.zip \
+  --predictions-input outputs/phase5/fiqa/model_predictions.json \
+  --output-dir outputs/phase5/my_fiqa_reproduced
+```
+
+Default tests: **209 passed, 7 skipped**; offline integration enabled: **216
+passed**. Tests cover dataset/mapping validation, duplicates, metric arithmetic,
+zero division, single-class data, baseline rules, errors/subgroups, deterministic
+exports, cache integrity, human-label gating and real cached-model integration.
+Tests never download datasets. Model repeatability is checked on small integration
+cases, and a separate full FiQA CLI inference rerun reproduced all eight artifacts
+byte-for-byte. PhraseBank's full metric replay uses the saved prediction cache.
+
+The blind local template `data/evaluation/annotations/earnings_sample.csv` contains
+**80 blank reference labels**, sampled from 119 distinct Phase 4 texts with seed
+42 and document-stratified round-robin selection. It contains source metadata but
+no FinBERT labels/confidence. Every row needs a genuine `human_label`,
+`annotator_id` and `review_status=reviewed`; the loader rejects pending reviews.
+No earnings accuracy, annotation agreement or labelled company/quarter subgroup
+performance is claimed yet.
+
 ## Current limitations
 
 - Local English TXT only, with manually prepared metadata; no PDF/HTML ingestion,
-  automatic language verification, scraping or dataset evaluation. Quarterly
+  automatic language verification or scraping. Dataset evaluation, quarterly
   summaries/comparisons and CSV/JSON/Markdown descriptive reports are implemented.
 - All JSON records/results are held in memory; model tensors are limited to one
   configurable batch. The implementation targets small collections, not large
-  corpus streaming. CSV export is not implemented.
+  corpus streaming. Batch prediction CSV export is not implemented; analysis and
+  evaluation do export CSV reports.
 - Segmentation is heuristic and requires review. Long sentences are rejected or
   explicitly flagged by preprocessing; standalone Phase 1 inference still truncates.
 - Softmax scores are model outputs, not calibrated certainty or financial advice.
@@ -543,7 +687,8 @@ a fresh clone lacking the ignored TXT files; no automated test accesses the web.
   that dataset must not be described as independent unseen-data evaluation.
   FiQA also needs dataset inspection and careful label mapping before evaluation.
 
-Next: Phase 5 should inspect permitted labelled datasets and a small manually
-labelled earnings sample, establish label mapping and leakage limitations, then
-evaluate classification performance. No dataset-based evaluation, robustness or
-fairness metrics, model training or upload interface is implemented in Phase 4.
+Next: Phase 6 can strengthen research presentation and, after human annotation
+and evaluation review, add a lightweight Gradio upload interface and potential
+Hugging Face Spaces deployment. These are planned only. No interface, PDF
+extraction, deployment, model training or demographic fairness metrics were
+implemented during Phase 5.

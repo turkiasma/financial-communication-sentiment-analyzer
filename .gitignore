@@ -12,6 +12,7 @@ models/
 outputs/
 data/raw/
 data/processed/
+data/evaluation/
 *.egg-info/
 dist/
 build/

@@ -1,0 +1,75 @@
+{
+  "access_limitations": [
+    "TheFinAI/en-fiqa-absa is gated; no gated data accessed",
+    "Original organizer downloads returned 404",
+    "Participant test inputs contain no reference scores; no held-out test metric is claimed",
+    "FinBERT paper also used FiQA regression experiments; released classifier exposure unverified"
+  ],
+  "annotation": {
+    "distinct_source_texts": 119,
+    "duplicates_not_sampled": 9,
+    "per_document": {
+      "aapl_fy2025_q1": 10,
+      "aapl_fy2025_q2": 10,
+      "aapl_fy2025_q3": 8,
+      "aapl_fy2025_q4": 10,
+      "msft_fy2025_q1": 11,
+      "msft_fy2025_q2": 11,
+      "msft_fy2025_q3": 10,
+      "msft_fy2025_q4": 10
+    },
+    "presentation_seed": 43,
+    "sample_size": 80,
+    "seed": 42,
+    "source_units": 128,
+    "status": "pending human review",
+    "template_sha256": "af813c0c52785ca66323ef4a949dd4405241c803ece311b023b58e7d31aa02b4"
+  },
+  "baseline_source_sha256": "3689e2744fe701aa3130dcac3091a831a6b702c3659e40b563e8e3e3d462f288",
+  "protocol_sha256": "9746c4a8c25f968d2d5d2841919217ebd258e6ad90650b739ddb9de0e0f6679d",
+  "protocol_version": "phase5_v1",
+  "retrievals": [
+    {
+      "dataset": "phrasebank",
+      "files": [
+        {
+          "bytes": 681890,
+          "path": "data/evaluation/phrasebank/FinancialPhraseBank-v1.0.zip",
+          "sha256": "0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6",
+          "url": "https://huggingface.co/datasets/takala/financial_phrasebank/resolve/8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964/data/FinancialPhraseBank-v1.0.zip"
+        }
+      ],
+      "retrieval_date": "2026-10-29"
+    },
+    {
+      "dataset": "fiqa",
+      "files": [
+        {
+          "bytes": 151039,
+          "path": "data/evaluation/fiqa/task1_headline_ABSA_train.json",
+          "sha256": "24bfd3dd662a22c95dbe2d2c86ac2ea75408dafb1027246ed27b53b5c7bad821",
+          "url": "https://raw.githubusercontent.com/dayanfcosta/fiqa-2018-task1/acd0f4cfafa6421774bc8f009e8fa3e0ec441357/datasets/task1_headline_ABSA_train.json"
+        },
+        {
+          "bytes": 21219,
+          "path": "data/evaluation/fiqa/task1_headline_ABSA_test.json",
+          "sha256": "a5ab90b9c6b5768a199bb1ffd377fa809af3e1418b2df6bf3f19123f10d7eb85",
+          "url": "https://raw.githubusercontent.com/dayanfcosta/fiqa-2018-task1/acd0f4cfafa6421774bc8f009e8fa3e0ec441357/datasets/task1_headline_ABSA_test.json"
+        },
+        {
+          "bytes": 227069,
+          "path": "data/evaluation/fiqa/task1_post_ABSA_train.json",
+          "sha256": "7a6490b1b765ac74a8933355d482c3ce7994780b2d961027d4b28a9c751b4998",
+          "url": "https://raw.githubusercontent.com/dayanfcosta/fiqa-2018-task1/acd0f4cfafa6421774bc8f009e8fa3e0ec441357/datasets/task1_post_ABSA_train.json"
+        },
+        {
+          "bytes": 22626,
+          "path": "data/evaluation/fiqa/task1_post_ABSA_test.json",
+          "sha256": "bc734a2bf3cc6ef37a28b3e249305607f04d4085b1cce5a0e2cdcc71c69ffaa8",
+          "url": "https://raw.githubusercontent.com/dayanfcosta/fiqa-2018-task1/acd0f4cfafa6421774bc8f009e8fa3e0ec441357/datasets/task1_post_ABSA_test.json"
+        }
+      ],
+      "retrieval_date": "2026-10-29"
+    }
+  ]
+}

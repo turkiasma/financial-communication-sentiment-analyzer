@@ -4,4 +4,5 @@ torch==2.14.1+cpu
 transformers==5.20.2
 numpy==2.5.4
 pytest==9.1.1
-# pandas, scikit-learn and nltk are not needed until later phases.
+scikit-learn==1.9.1
+# pandas and nltk remain installed locally but are not required by this pipeline.

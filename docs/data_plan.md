@@ -255,33 +255,39 @@ performance, stock-price effects or model accuracy. Copyright/access restriction
 above still apply; reports containing exact excerpts are not approved public
 redistribution artifacts merely because they were generated locally.
 
-## Future labelled evaluation input — Phase 5 only
+## Phase 5 labelled evaluation — implemented with limitations
 
-The existing `normalize_text` function and token counter can be reused on already
-labelled sentences, without re-segmenting them or assigning invented company and
-quarter metadata. Plan a **separate** evaluation-record schema with `dataset_id`,
-`dataset_revision`, `split`, `sample_id`, `text`, `original_text`, `original_label`
-and a documented `mapped_label`. Preserve target/aspect, source category and
-agreement information where supplied. Gold labels must remain separate from
-model predictions. This adapter and all evaluation metrics remain unimplemented.
+See the executed [evaluation protocol](evaluation_methodology.md),
+[findings](evaluation_findings.md), and [human annotation guide](annotation_guide.md).
+The evaluation schema preserves `example_id`, `text`, `original_text`,
+`true_label`, `original_label`, `source_dataset`, `split` and available target/aspect
+and source-type metadata. Gold references remain separate from predictions.
 
 - [Financial PhraseBank](https://huggingface.co/datasets/takala/financial_phrasebank):
-  inspect the selected annotator-agreement configuration, label representation,
-  duplicates and data availability before defining a split. The card identifies
-  CC BY-NC-SA 3.0 and currently reports a legacy dataset-script compatibility
-  issue. [FinBERT's model card](https://huggingface.co/ProsusAI/finbert) identifies
-  PhraseBank as fine-tuning data; results must not be presented as independent
-  unseen-data evaluation.
+  the pinned original ZIP is read directly, avoiding legacy dataset-script or
+  Arrow dependencies. Only AllAgree is scored: 2,264 original rows, 2,259 after
+  five same-label duplicates. CC BY-NC-SA 3.0 applies. Known FinBERT fine-tuning
+  overlap is prominently disclosed; no independent held-out claim is made.
 - The requested [FiQA URL](https://huggingface.co/datasets/TheFinAI/fiqa-sentiment-classification)
-  currently redirects to [TheFinAI/en-fiqa-absa](https://huggingface.co/datasets/TheFinAI/en-fiqa-absa).
-  The visible card requires an access form, describes aspect-based sentiment,
-  and lists sentence, target, aspect, score and headline/post type fields. The
-  actual gated files and label values have **not** been inspected. Confirm the
-  exact dataset/version, permitted use, split definitions, target semantics and
-  score/label representation before deciding a three-class mapping. Do not
-  assume its numerical indices match FinBERT, and do not invent score thresholds.
+  redirects to gated [TheFinAI/en-fiqa-absa](https://huggingface.co/datasets/TheFinAI/en-fiqa-absa).
+  Those gated files were not accessed, and original organizer downloads returned
+  404. A pinned original-format participant repository supplies labelled training
+  files and unlabelled test inputs. The implemented diagnostic uses 1,052
+  single-target train examples after 60 multi-target and one train/test overlap
+  exclusions. Published PIXIU thresholds were fixed before inference; original
+  scores/targets are preserved. No official test accuracy is fabricated.
+- The [original FinBERT paper](https://arxiv.org/html/1908.10063) also used FiQA
+  regression experiments. The released classifier's exact exposure is unknown;
+  this remains an external-source candidate diagnostic, not guaranteed unseen
+  generalization evidence. A check against PhraseBank 50Agree found no eligible
+  FiQA text match; it cannot rule out near-duplicates or pretraining contamination.
+- Eighty original earnings units were sampled without consulting predictions,
+  but all human labels remain blank. No in-domain accuracy or annotation agreement
+  is claimed. The loader rejects pending annotations.
 
-Earnings releases have no gold sentiment labels by default. They can support
-later communication-tone comparisons but are not automatically evaluation data.
-No dataset download, label conversion, metrics or fairness analysis is part of
-Phases 2–4.
+Raw data, annotation text and generated reports stay in ignored
+`data/evaluation/` and `outputs/phase5/`. Only the metadata-only
+`data/evaluation_manifests/phase5_sources.json`, code and documentation are intended
+for Git. It records source URLs/revisions/hashes, retrieval dates and the pending
+annotation protocol. No dataset package, additional model or GPU dependency was
+installed. Demographic fairness metrics remain out of scope.
