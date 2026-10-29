@@ -1,1 +1,1 @@
-"""Local financial sentiment inference and document preprocessing."""
+"""Local financial sentiment inference, preprocessing and fiscal-quarter analysis."""

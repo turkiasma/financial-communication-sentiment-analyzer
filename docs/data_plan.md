@@ -1,7 +1,8 @@
 # Financial document and evaluation data plan
 
 Source pages checked on **2026-10-29**. This contains the wider source shortlist
-and a four-release Phase 3 demonstration. Source text, snapshots and generated
+and the expanded eight-release Phase 4 collection (with the original Phase 3
+demonstration retained below as history). Source text, snapshots and generated
 predictions are kept locally in ignored directories; no third-party document text
 or evaluation dataset is tracked in Git. Links and metadata below were checked
 against official pages.
@@ -65,7 +66,7 @@ Keep UTF-8 encoding and preprocessing version/tokenizer revision with results.
 The supplied fixture is original fictional text and explicitly marked synthetic.
 Its example.com URL is a placeholder, not financial evidence.
 
-## Phase 3: four-release local demonstration
+## Phase 3: original four-release local demonstration
 
 The first two fiscal periods for each company were rechecked and processed:
 
@@ -76,8 +77,11 @@ The first two fiscal periods for each company were rechecked and processed:
 | [aapl_fy2025_q1](../data/metadata/aapl_fy2025_q1.json) | Apple FY2025 Q1 | 2025-01-30 | 6 |
 | [aapl_fy2025_q2](../data/metadata/aapl_fy2025_q2.json) | Apple FY2025 Q2 | 2025-05-01 | 5 |
 
-Official source URLs and exact quarter-end dates are in the table above and each
-metadata file. These are fiscal periods; Microsoft FY2025 Q1 was published in
+These counts describe the Phase 3 `opening_ceo_cfo_statements_v1` run; current
+metadata files now describe the broader Phase 4 extraction below. Original Phase 3
+TXT/predictions remain local, and its metadata can be recovered from the Phase 3
+Git commit. Official source URLs and exact quarter-end dates are in the table
+above and each metadata file. These are fiscal periods; Microsoft FY2025 Q1 was published in
 calendar 2024. None of the required source metadata was missing or uncertain.
 
 ### Consistent extraction scope
@@ -119,7 +123,10 @@ and prediction probability sums were validated. Results are in ignored
 `execution_summary.json`. This is an execution demonstration, not an accuracy
 evaluation or quarterly sentiment comparison.
 
-### Manual preparation on another checkout
+### Historical Phase 3 manual preparation
+
+This describes the original narrow extraction. For the current manifests, use
+the Phase 4 instructions below and their broader selection policy.
 
 1. Open the four official URLs using the links above and check applicable terms
    for your intended use. Preserve original notices with any retained originals.
@@ -144,6 +151,109 @@ Real-text availability is intentionally local: a fresh clone contains metadata
 and instructions, not the source text or derived predictions. Public access did
 not establish redistribution permission. No text or model weights need to be
 downloaded again on this laptop; no additional dependencies were installed.
+
+## Phase 4: eight-release consistent financial narrative collection
+
+All eight official releases in the first table were verified and processed.
+Four new releases (each company's Q3 and Q4) were acquired as small, individually
+selected HTML snapshots. Existing Q1/Q2 snapshots were reused. No broad scraper,
+bulk downloader, model download or dataset download was added. Source dates and
+fiscal periods match the official pages; no required source metadata was missing.
+
+| Manifest (official URL is also in the inventory above) | Classified units | Positive / negative / neutral |
+| --- | --- | --- |
+| [Microsoft FY2025 Q1](../data/metadata/msft_fy2025_q1.json) | 22 | 17 / 0 / 5 |
+| [Microsoft FY2025 Q2](../data/metadata/msft_fy2025_q2.json) | 23 | 18 / 1 / 4 |
+| [Microsoft FY2025 Q3](../data/metadata/msft_fy2025_q3.json) | 22 | 18 / 0 / 4 |
+| [Microsoft FY2025 Q4](../data/metadata/msft_fy2025_q4.json) | 22 | 18 / 0 / 4 |
+| [Apple FY2025 Q1](../data/metadata/aapl_fy2025_q1.json) | 10 | 6 / 0 / 4 |
+| [Apple FY2025 Q2](../data/metadata/aapl_fy2025_q2.json) | 10 | 8 / 0 / 2 |
+| [Apple FY2025 Q3](../data/metadata/aapl_fy2025_q3.json) | 8 | 5 / 0 / 3 |
+| [Apple FY2025 Q4](../data/metadata/aapl_fy2025_q4.json) | 11 | 7 / 0 / 4 |
+
+Policy **`financial_narrative_v2`** was applied to every release, including the four
+old ones; no version-1 excerpt was appended to the new collection. All complete
+selected blocks are retained without sentiment filtering. Duplicate blocks within
+a document are removed; repeated commentary across different quarters remains
+part of each source. The current manifests record the original HTML hash,
+extracted TXT hash, retrieval date, quarter-end, selected blocks/sections,
+company-specific comparison profile and extraction limitations.
+
+### Selection boundaries and differing company formats
+
+- **Microsoft:** select the datelined quarterly overview through the business
+  outlook paragraph immediately preceding `Quarterly Highlights, Product Releases,
+  and Enhancements`. This includes opening revenue/income/EPS text bullets,
+  complete CEO/CFO statements, business-segment narrative and all its financial
+  bullets, shareholder-return commentary, and the outlook paragraph. Remove
+  headings. For Q4, omit the separate `Fiscal Year 2025 Results` section up to
+  `Business Outlook`, so annual summary bullets are not mistaken for quarterly
+  results. Opening Q4 CEO/CFO remarks can still include annual figures; they are
+  kept in context and this limitation is recorded. The selected HTML `p` indices
+  are in each manifest; they total 20 blocks per quarter.
+- **Apple:** select the opening quarterly results overview, complete CEO/CFO
+  paragraphs, and dividend/share-repurchase narrative. Stop before the webcast
+  logistics paragraph. These are the first four `div.pagebody-copy` blocks in each
+  saved source. The source's dateline location label remains with the overview.
+  Q4 management remarks also refer to full-year performance and are retained.
+- **Both:** exclude numerical tables, navigation, headings, webcast logistics,
+  unrelated product-release lists, repeated corporate descriptions and legal
+  boilerplate. No stand-alone legal risk list is treated as operational narrative.
+  Relevant challenges or outlook language inside selected sections is kept.
+
+The common top-level policy has distinct comparison profiles:
+`msft_quarterly_financial_narrative_v2` and
+`aapl_quarterly_financial_narrative_v2`. Microsoft has additional segment highlights
+and an outlook paragraph that refers to guidance on a separate call; Apple has no
+equivalent sections in the selected opening release body. No call transcript or
+PDF was substituted. The reports compare quarters **within a company**, not the
+two companies' non-equivalent structures as if they were identical.
+
+### Manual extraction and reproduction
+
+1. Open each of the eight official links in the inventory. Check applicable use
+   terms; retain original notices with originals. Current local snapshots are in
+   ignored `data/raw/source_html/`; no new acquisition is needed on this laptop.
+2. Select the complete blocks defined above. Decode HTML entities and collapse
+   whitespace within each block, without changing its words, numbers, negation or
+   punctuation. Join blocks in source order with a blank line and end with a newline.
+   Do **not** add periods to unpunctuated financial bullets.
+3. Save UTF-8 text at `data/raw/phase4/<document_id>.txt`. Review source order,
+   duplicate removal and section exclusions. Keep originals and extracted text
+   separate. On another machine, update retrieval/method/selection notes and
+   hashes in the manifests to match the bytes actually prepared; source HTML may
+   change. Do not reuse a hash from this run for a different local extraction.
+4. Run Phase 2 preprocessing version 2 on each manifest with
+   `--long-sentence-policy keep`. This preserves blank-line paragraph boundaries,
+   so unpunctuated financial bullets remain separate text segments with exact
+   source offsets. The output column name `classified_sentences` includes these
+   documented units; this is not an assertion that each bullet is a grammatical
+   sentence. Reprocess **all** quarters when changing scope or preprocessing.
+5. Combine the sentence JSONL in a fixed document order if running one batch job,
+   preserving IDs, then run Phase 3 with `--batch-size 8 --local-files-only`.
+   Keep its skipped companion file if created. Predictions already exist locally
+   at `outputs/phase4/real_predictions.jsonl`; Phase 2 input is
+   `outputs/phase4/real_sentences.jsonl`.
+6. Run `python -m src.analysis --input outputs/phase4/real_predictions.jsonl
+   --source-input outputs/phase4/real_sentences.jsonl --output-dir outputs/phase4/my_report`.
+   Use a fresh output directory. The CLI discovers `<input>.skipped.jsonl`, or
+   accepts `--skipped-input`. Full source-ID reconciliation is required for verified
+   coverage; absent outputs are errors. Without Phase 2 input, total source size
+   and coverage are explicitly unknown, not assumed complete.
+
+The executed collection has **128 classified units, 0 skips, 8 documents, 8
+company-periods and 6 adjacent-quarter comparisons**, with source-ID accounting
+verified. Reports are local under `outputs/phase4/final_report/`; complete source
+and derived text remain ignored by Git. Corporate language is predominantly
+positive/neutral in this selected sample; missing negative categories are reported
+as absent rather than supplied with fabricated evidence.
+
+Samples of 8–23 units per release are small and dependent within documents.
+Broadening extraction improves coverage over the original 18-unit demonstration
+but does not establish representativeness, statistical significance, financial
+performance, stock-price effects or model accuracy. Copyright/access restrictions
+above still apply; reports containing exact excerpts are not approved public
+redistribution artifacts merely because they were generated locally.
 
 ## Future labelled evaluation input — Phase 5 only
 
@@ -174,4 +284,4 @@ model predictions. This adapter and all evaluation metrics remain unimplemented.
 Earnings releases have no gold sentiment labels by default. They can support
 later communication-tone comparisons but are not automatically evaluation data.
 No dataset download, label conversion, metrics or fairness analysis is part of
-Phase 2.
+Phases 2–4.

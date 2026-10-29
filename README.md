@@ -2,9 +2,10 @@
 
 A Python backend NLP project exploring how financial-domain NLP can help analyze
 and compare corporate communication sentiment across reporting periods.
-**Phases 1–3 are implemented:** local FinBERT inference, English TXT ingestion,
-sentence preprocessing with provenance, and CPU batch predictions demonstrated on
-real earnings-release excerpts. This is a portfolio/research project, not a trading,
+**Phases 1–4 are implemented:** local FinBERT inference, English TXT ingestion,
+sentence preprocessing with provenance, CPU batch predictions and descriptive
+quarterly sentiment comparison on eight real earnings-release excerpts.
+This is a portfolio/research project, not a trading,
 stock-prediction or financial recommendation system.
 
 ## Roadmap
@@ -12,7 +13,7 @@ stock-prediction or financial recommendation system.
 1. **Project setup and FinBERT baseline — implemented.**
 2. **Financial document ingestion and preprocessing — implemented.**
 3. **Batch sentiment inference and structured prediction export — implemented.**
-4. Reporting-period sentiment comparison — planned.
+4. **Reporting-period sentiment aggregation and comparison — implemented.**
 5. Dataset-based evaluation and robustness analysis — planned.
 6. Final research reports and portfolio documentation — planned.
 
@@ -22,6 +23,8 @@ stock-prediction or financial recommendation system.
 src/__init__.py          Package marker
 src/inference.py         Reusable CPU classifier and five-sentence terminal demo
 src/batch_inference.py   Validated JSONL input, CPU batches and prediction JSONL CLI
+src/analysis.py          Model-free quarterly summaries, comparisons and reports
+src/records.py           Shared record validation and strict JSONL reader
 src/model_config.py      Shared pinned model/tokenizer settings
 src/ingestion.py         JSON metadata validation and UTF-8 TXT loading
 src/preprocessing.py     Sentence records, token-length checks and JSONL CLI
@@ -29,9 +32,10 @@ tests/test_inference.py  Offline unit tests and an opt-in model integration test
 tests/test_ingestion.py  Ingestion and metadata validation tests
 tests/test_preprocessing.py  Segmentation, provenance, length policy and CLI tests
 tests/test_batch_inference.py  Batch validation, metadata, long inputs and integration tests
+tests/test_analysis.py   Known arithmetic, coverage, fiscal ordering, exports and end-to-end checks
 tests/conftest.py        Single shared cached model for opt-in integration tests
 tests/fixtures/          Original fictional earnings text and matching metadata
-data/metadata/          Four verified real-release metadata files; no release text
+data/metadata/          Eight verified real-release metadata files; no release text
 docs/data_plan.md        Verified source shortlist and future evaluation input plan
 pytest.ini              Test discovery and integration marker
 requirements.txt        Direct dependencies pinned to the verified environment
@@ -217,13 +221,22 @@ Use unique document IDs across the collection. No sentiment fields are added.
 
 ### Cleaning, segmentation and long sentences
 
-Whitespace and line breaks collapse to single spaces. Formatting-only separator
+Within each paragraph, whitespace and line breaks collapse to single spaces. Formatting-only separator
 lines (`---`, `===`, `___`, `***`), unnumbered bullet prefixes and BOM artifacts
 are removed; zero-width spaces become whitespace to preserve word boundaries.
 Financial symbols, decimals, percentages, dates,
 case, negation and other words remain intact. There is no stemming or stopword
 removal. Punctuation-only and numeric-only fragments are discarded; short
 alphabetic fragments and an unterminated final sentence are retained.
+
+Preprocessing **version 2**, introduced in Phase 4, honors blank-line paragraph
+boundaries before segmentation. Unpunctuated narrative bullets remain separate
+text segments; no punctuation is invented. Single line wraps within a paragraph
+still collapse to whitespace. Records include
+`segmentation_unit=sentence_or_paragraph_fragment`. Source offsets remain exact.
+All eight Phase 4 releases were reprocessed with version 2; do not mix them with
+old version-1 predictions. The term "sentences" in output column names includes
+these documented paragraph fragments.
 
 A small standard-library rule set handles `.?!`, closing quotes, decimals, common
 English titles/month abbreviations and dotted acronyms such as `U.S.`. Company
@@ -357,7 +370,7 @@ print(len(result.predictions), len(result.skipped))
 
 ### Authentic financial-document demonstration
 
-Four official releases were verified and their complete opening CEO and CFO
+The original Phase 3 demonstration used four official releases and their complete opening CEO and CFO
 statement paragraphs extracted locally using one consistent selection policy:
 Microsoft FY2025 Q1–Q2 and Apple FY2025 Q1–Q2. All sentences in the selected
 paragraphs were included, including product commentary. These are **excerpts**,
@@ -366,8 +379,9 @@ or quarter-over-quarter calculation was performed.
 
 See [the data plan](docs/data_plan.md) for official links, fiscal dates, exact
 extraction scope, access/redistribution notes and a manual preparation workflow.
-The four `data/metadata/*.json` files are suitable for Git; their associated TXT
-files and original HTML snapshots are under ignored `data/raw/`. On another
+The metadata files are suitable for Git; Phase 4 has updated these manifests to
+the broader policy below and added four more. TXT files and original HTML
+snapshots remain under ignored `data/raw/`. On another
 checkout, prepare the TXT files first. For an existing local real document:
 
 ```bash
@@ -384,7 +398,7 @@ User-provided releases use the same workflow: place a UTF-8 narrative TXT in
 `data/raw/`, create a matching metadata JSON with accurate source facts, then run
 these two CLIs. HTML/PDF ingestion and automated downloading are not implemented.
 
-Verification on 2026-10-29: **112 passed, 3 skipped** by default and **115 passed**
+Phase 3 baseline verification: **112 passed, 3 skipped** by default and **115 passed**
 with `RUN_FINBERT_INTEGRATION=1 HF_HUB_OFFLINE=1`. Integration tests share one
 cached model and cover real multi-batch inference, CPU placement, all probabilities,
 metadata preservation and agreement across batch sizes and single inference.
@@ -397,11 +411,125 @@ machine/cache-specific. Predictions and the execution summary are in ignored
 `outputs/phase3/`. These counts describe software execution, not labelled model
 evaluation. Synthetic and real-data CLI runs also succeeded offline.
 
+## Phase 4: sentiment aggregation and fiscal-quarter comparison
+
+`src.analysis` reads saved predictions, validates their probabilities and source
+metadata, groups by company and fiscal period, and produces the four artifacts
+below. It uses only the standard library and imports neither PyTorch nor
+Transformers. FinBERT is not loaded during aggregation. Shared schema validation
+was moved into `src.records`; Phase 3's public reader/validator imports still work.
+
+For a complete workflow on a user-provided financial TXT, first prepare metadata
+as described above, run preprocessing and batch inference, then analyze saved
+predictions. The expanded eight-document run is already available locally:
+
+```bash
+source .venv-finsentiment/bin/activate
+python -m src.analysis \
+  --input outputs/phase4/real_predictions.jsonl \
+  --source-input outputs/phase4/real_sentences.jsonl \
+  --output-dir outputs/phase4/my_report
+```
+
+Use a new output directory: existing artifacts are never overwritten. The
+`--source-input` is the complete Phase 2 JSONL. The CLI automatically discovers
+`<input>.skipped.jsonl`, or accepts an explicit `--skipped-input`. Reconciliation
+requires every source ID to occur exactly once in classified or skipped outputs,
+with every source field unchanged. Missing outputs cause an error, not inferred
+neutral predictions. If source records are omitted, the report marks coverage as
+unverified and source totals/coverage as unknown; supplied skips are known skips
+only. Supply source records for trustworthy coverage reporting.
+
+### Metrics and fiscal ordering
+
+- Positive/negative/neutral counts and percentages use **classified sentences**.
+- Mean probability for each class averages that class's probability over **all**
+  classified sentences, not just those assigned to the class.
+- **Net sentiment = (positive count − negative count) / classified count.**
+  Neutral sentences remain in the denominator. This is a transparent descriptive
+  indicator on [-1, +1], not an established financial risk metric.
+- Zero-classified groups have counts of zero but **null** percentages, means and
+  net sentiment; CSV uses blank cells and Markdown uses N/A. Skips remain skips.
+- Comparisons use consecutive fiscal quarters **within each company**, including
+  FY2024 Q4 → FY2025 Q1. Gaps are flagged and are not bridged. Distribution changes
+  are **percentage points**, while net changes use the original [-1, +1] scale.
+
+Duplicate IDs, conflicting company/document metadata, nonfinite or invalid
+probabilities, wrong winning labels, and mixed model/preprocessing versions are
+rejected. Each company must use consistent document type, extraction policy,
+comparison profile and selected section names across its periods. Different
+companies may have different profiles and are never compared as equivalent text.
+
+### Artifacts
+
+| File | Contents |
+| --- | --- |
+| `quarterly_sentiment_summary.csv` | Company/quarter, document count, total/classified/skipped units, verified coverage, three class counts/percentages, three mean probabilities, net score and extraction policy/profile |
+| `quarterly_comparison.csv` | Previous/current fiscal periods, distributions, percentage-point changes, net scores/change, sample sizes and coverage for both periods |
+| `sentiment_analysis.json` | Company summaries, processing versions, source documents/hashes, period summaries, evidence, classified/skipped ID membership, comparisons, coverage, input-file hashes and limitations |
+| `financial_sentiment_report.md` | Readable methodology, distribution/comparison tables, official sources, exact supporting text and interpretation limits |
+
+Evidence is the highest predicted-class-probability sentence in each available
+category per period, with sentence ID as tie-breaker. An absent class is stated
+explicitly. Confidence is not proof of objective sentiment. Exact text, source
+URL, document/period, offsets and hash remain traceable. Evidence/report files
+contain third-party excerpts and stay in ignored output directories.
+CSV/JSON retain arithmetic precision; Markdown rounds percentages to one decimal
+and net scores to two. Outputs contain no timestamps and are deterministic for
+the same validated inputs. No significance testing or accuracy metrics are run.
+
+### Expanded real-document collection and actual results
+
+All eight FY2025 releases were re-extracted under `financial_narrative_v2`, including
+the original four, then preprocessed with version 2 and inferred on CPU. The
+selection includes quarterly opening overview, CEO/CFO statements and capital
+return. Microsoft also supplies segment/business financial highlights and an
+outlook paragraph; Apple's opening narrative lacks equivalent sections. The
+metadata records company-specific profiles and limitations. Tables, navigation,
+headings, webcast logistics, standalone annual-results sections, duplicate blocks
+and legal boilerplate are excluded. Every chosen block is included regardless of
+sentiment. Opening Q4 management statements can still discuss full-year results.
+
+See [the eight-source inventory and extraction instructions](docs/data_plan.md).
+Microsoft has 22, 23, 22 and 22 units in Q1–Q4; Apple has 10, 10, 8 and 11.
+That is **128 classified units, 8 documents, 2 companies, 8 company-periods,
+0 skipped units and 6 consecutive-quarter comparisons**. Coverage is 100% of
+the extracted local text units, not 100% of either complete earnings release.
+
+| Company | FY2025 quarter | Classified | Positive / negative / neutral counts | Net sentiment |
+| --- | --- | --- | --- | --- |
+| Microsoft | Q1 | 22 | 17 / 0 / 5 | 0.77 |
+| Microsoft | Q2 | 23 | 18 / 1 / 4 | 0.74 |
+| Microsoft | Q3 | 22 | 18 / 0 / 4 | 0.82 |
+| Microsoft | Q4 | 22 | 18 / 0 / 4 | 0.82 |
+| Apple | Q1 | 10 | 6 / 0 / 4 | 0.60 |
+| Apple | Q2 | 10 | 8 / 0 / 2 | 0.80 |
+| Apple | Q3 | 8 | 5 / 0 / 3 | 0.62 |
+| Apple | Q4 | 11 | 7 / 0 / 4 | 0.64 |
+
+For example, Microsoft Q1→Q2 changes were +1.0 pp positive, +4.3 pp negative and
+−5.3 pp neutral; net sentiment changed by about −0.034. The sample sizes are only
+22 and 23 units. These are descriptive differences with no significance claim.
+The broader scope increased the original 18-unit demonstration to 128 units, but
+the samples remain small, company-selected and potentially promotional.
+
+The executed reports are in ignored `outputs/phase4/final_report/`; source-unit
+and prediction JSONL plus an execution summary are in `outputs/phase4/`. The
+complete eight-document run took about 6.3 seconds in the measured environment,
+excluding Python imports and source acquisition. This is not a performance benchmark.
+
+Run all checks with the test commands above. Phase 4 verification: **149 passed,
+5 skipped** by default; **154 passed** with cached integration enabled. Tests
+cover known arithmetic, neutral denominators, fiscal rollover/gaps, duplicate and
+incompatible inputs, skipped/zero-classified groups, deterministic exports and
+synthetic plus real eight-release workflows. Real-source tests skip explicitly on
+a fresh clone lacking the ignored TXT files; no automated test accesses the web.
+
 ## Current limitations
 
 - Local English TXT only, with manually prepared metadata; no PDF/HTML ingestion,
-  automatic language verification, scraping, quarterly comparisons or dataset
-  evaluation. JSONL preprocessing and batch prediction export are implemented.
+  automatic language verification, scraping or dataset evaluation. Quarterly
+  summaries/comparisons and CSV/JSON/Markdown descriptive reports are implemented.
 - All JSON records/results are held in memory; model tensors are limited to one
   configurable batch. The implementation targets small collections, not large
   corpus streaming. CSV export is not implemented.
@@ -415,6 +543,7 @@ evaluation. Synthetic and real-data CLI runs also succeeded offline.
   that dataset must not be described as independent unseen-data evaluation.
   FiQA also needs dataset inspection and careful label mapping before evaluation.
 
-Next: Phase 4 can compare equivalent narrative sections across fiscal periods,
-using the preserved provenance and explicitly accounting for skipped text and
-extraction scope. No period aggregation or formal evaluation is implemented here.
+Next: Phase 5 should inspect permitted labelled datasets and a small manually
+labelled earnings sample, establish label mapping and leakage limitations, then
+evaluate classification performance. No dataset-based evaluation, robustness or
+fairness metrics, model training or upload interface is implemented in Phase 4.

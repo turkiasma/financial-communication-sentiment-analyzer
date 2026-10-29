@@ -10,7 +10,7 @@ from typing import Any
 from src.ingestion import FinancialDocument, load_document
 from src.model_config import MAX_INPUT_TOKENS, MODEL_ID, MODEL_REVISION
 
-PREPROCESSING_VERSION = "1"
+PREPROCESSING_VERSION = "2"
 TokenCounter = Callable[[str], int]
 # Only formatting-only lines and unnumbered list prefixes are removed.
 _ARTIFACT = re.compile(r"(?m)^[ \t\ufeff]*[-_=*]{3,}[ \t]*\r?$|^[ \t\ufeff]*[-*•·][ \t]+")
@@ -97,6 +97,23 @@ def load_token_counter() -> TokenCounter:
     return count_tokens
 
 
+def _document_sentences(text: str) -> Iterator[tuple[str, int, int]]:
+    """Respect blank-line paragraph boundaries without inventing punctuation.
+
+    An unterminated financial bullet/paragraph is retained as an explicit text
+    segment rather than joined to an unrelated paragraph. Offsets remain in TXT.
+    Single line wraps within a paragraph still normalize to whitespace.
+    """
+    paragraph_start = 0
+    for boundary in re.finditer(r"\r?\n[ \t]*\r?\n|\Z", text):
+        paragraph = text[paragraph_start:boundary.start()]
+        normalized, offsets = _normalize_with_offsets(paragraph)
+        for start, end in sentence_spans(normalized):
+            yield (normalized[start:end], paragraph_start + offsets[start],
+                   paragraph_start + offsets[end - 1] + 1)
+        paragraph_start = boundary.end()
+
+
 def preprocess_document(
     document: FinancialDocument,
     *,
@@ -113,10 +130,8 @@ def preprocess_document(
         raise ValueError("long_sentence_policy must be 'error' or 'keep'.")
     if type(max_tokens) is not int or not 2 < max_tokens <= MAX_INPUT_TOKENS:
         raise ValueError(f"max_tokens must be an integer from 3 to {MAX_INPUT_TOKENS}.")
-    normalized, offsets = _normalize_with_offsets(document.text)
     records = []
-    for start, end in sentence_spans(normalized):
-        sentence = normalized[start:end]
+    for sentence, source_start, source_end in _document_sentences(document.text):
         # Discard punctuation-only and numeric-only/table fragments, not short words.
         if not any(char.isalpha() for char in sentence):
             continue
@@ -129,7 +144,6 @@ def preprocess_document(
                 f"Sentence {sentence_id} has {count} tokens, exceeding {max_tokens}. "
                 "No output written. Use --long-sentence-policy keep to retain and flag for review."
             )
-        source_start, source_end = offsets[start], offsets[end - 1] + 1
         records.append({
             **document.metadata,
             "sentence_id": sentence_id,
@@ -146,6 +160,7 @@ def preprocess_document(
             "tokenizer_revision": MODEL_REVISION,
             "long_sentence_policy": long_sentence_policy,
             "preprocessing_version": PREPROCESSING_VERSION,
+            "segmentation_unit": "sentence_or_paragraph_fragment",
         })
     if not records:
         raise ValueError("Document contains no usable text after preprocessing.")

@@ -63,6 +63,15 @@ def test_zero_width_space_preserves_word_boundaries(document):
     assert record["original_text"] == raw
 
 
+def test_paragraph_fragments_do_not_merge_or_invent_punctuation(document):
+    raw = "Revenue grew 4.2%\r\n\r\nCosts did\nnot rise\n\nCash was stable."
+    records = preprocess_document(with_text(document, raw), token_counter=fake_counter)
+    assert [record["text"] for record in records] == ["Revenue grew 4.2%", "Costs did not rise", "Cash was stable."]
+    assert records[0]["preprocessing_version"] == "2"
+    for record in records:
+        assert raw[record["source_char_start"]:record["source_char_end"]] == record["original_text"]
+
+
 def test_whitespace_artifacts_and_source_spans(document):
     raw = "\ufeff===\r\n• Revenue\t rose  by 4.2%.\r\n\r\nCosts did\nnot rise.\r\n---\r\n"
     records = preprocess_document(with_text(document, raw), token_counter=fake_counter)
