@@ -2,12 +2,13 @@
 
 A Python backend NLP project exploring how financial-domain NLP can help analyze
 and compare corporate communication sentiment across reporting periods.
-**Phases 1–5B are implemented:** local FinBERT inference, English TXT ingestion,
+**Phases 1–6 are implemented:** local FinBERT inference, English TXT ingestion,
 sentence preprocessing with provenance, CPU batch predictions and descriptive
 quarterly sentiment comparison on eight real earnings-release excerpts, plus
 labelled-data evaluation, a fixed baseline and descriptive robustness analysis.
 Phase 5B adds a documented human-labelled external headline sample; a verified
-FiQA held-out test remains unavailable.
+FiQA held-out test remains unavailable. Phase 6 adds a local Gradio interface,
+optional upload metadata, text-based PDF extraction and CSV/PDF downloads.
 This is a portfolio/research project, not a trading,
 stock-prediction or financial recommendation system.
 
@@ -18,12 +19,18 @@ stock-prediction or financial recommendation system.
 3. **Batch sentiment inference and structured prediction export — implemented.**
 4. **Reporting-period sentiment aggregation and comparison — implemented.**
 5. **Dataset-based evaluation and robustness analysis — implemented, with access and exposure limitations below.**
-6. Final research reports and portfolio documentation — planned.
+6. **Local document upload interface, PDF support and CSV/PDF reporting — implemented.**
+
+Deployment and hosting remain future work.
 
 ## Structure
 
 ```text
 src/__init__.py          Package marker
+src/app.py               Local Gradio interface; python -m src.app
+src/document_processing.py  Optional-metadata upload adapter, token-safe segments and CPU pipeline
+src/pdf_extraction.py    Bounded text-PDF extraction and explicit omissions
+src/reporting.py         Request-owned sentence CSV, skipped-content CSV and PDF report
 src/inference.py         Reusable CPU classifier and five-sentence terminal demo
 src/batch_inference.py   Validated JSONL input, CPU batches and prediction JSONL CLI
 src/analysis.py          Model-free quarterly summaries, comparisons and reports
@@ -40,6 +47,10 @@ tests/test_preprocessing.py  Segmentation, provenance, length policy and CLI tes
 tests/test_batch_inference.py  Batch validation, metadata, long inputs and integration tests
 tests/test_analysis.py   Known arithmetic, coverage, fiscal ordering, exports and end-to-end checks
 tests/test_evaluation*.py  Dataset, baseline, metrics, cache, subgroup and integration tests
+tests/test_document_processing.py  Upload metadata, long inputs and CPU integration
+tests/test_pdf_extraction.py  Generated text/image/encrypted/table PDF fixtures
+tests/test_reporting.py  CSV/PDF content, ordering and temporary-file ownership
+tests/test_app.py        Gradio wiring, state clearing and download isolation
 tests/conftest.py        Single shared cached model for opt-in integration tests
 tests/fixtures/          Original fictional earnings text and matching metadata
 data/metadata/          Eight verified real-release metadata files; no release text
@@ -407,7 +418,8 @@ python -m src.batch_inference \
 
 User-provided releases use the same workflow: place a UTF-8 narrative TXT in
 `data/raw/`, create a matching metadata JSON with accurate source facts, then run
-these two CLIs. HTML/PDF ingestion and automated downloading are not implemented.
+these two CLIs. They accept TXT only; Phase 6 provides optional-metadata TXT/PDF
+uploads separately. HTML ingestion and automated source downloading are unsupported.
 
 Phase 3 baseline verification: **112 passed, 3 skipped** by default and **115 passed**
 with `RUN_FINBERT_INTEGRATION=1 HF_HUB_OFFLINE=1`. Integration tests share one
@@ -699,15 +711,18 @@ metadata, Phase 4 outputs and historical commits remain intact.
 
 ## Current limitations
 
-- Local English TXT only, with manually prepared metadata; no PDF/HTML ingestion,
-  automatic language verification or scraping. Dataset evaluation, quarterly
-  summaries/comparisons and CSV/JSON/Markdown descriptive reports are implemented.
+- The local interface accepts English UTF-8 TXT and text-based PDF with optional
+  metadata. Language is not automatically verified. PDF extraction is heuristic;
+  scanned documents, OCR, HTML ingestion and scraping are unsupported. The earlier
+  verified-quarter JSON CLI retains its stricter metadata requirements.
 - All JSON records/results are held in memory; model tensors are limited to one
   configurable batch. The implementation targets small collections, not large
-  corpus streaming. Batch prediction CSV export is not implemented; analysis and
-  evaluation do export CSV reports.
-- Segmentation is heuristic and requires review. Long sentences are rejected or
-  explicitly flagged by preprocessing; standalone Phase 1 inference still truncates.
+  corpus streaming. The upload interface exports sentence-level CSV; the earlier
+  batch CLI retains JSONL output. Analysis and evaluation also export CSV reports.
+- Segmentation is heuristic and requires review. The upload adapter splits long
+  units without truncation; segments can lose cross-boundary context. The earlier
+  preprocessing CLI still rejects/flags long units; Phase 1 single-sentence inference
+  still truncates. Phase 3 strict batch inference does not truncate.
 - Softmax scores are model outputs, not calibrated certainty or financial advice.
   Demonstration results do not establish accuracy or real-world reliability.
 - Repeatability is checked within numerical tolerance on this environment;
@@ -716,11 +731,196 @@ metadata, Phase 4 outputs and historical commits remain intact.
   not independent unseen-data performance. FiQA remains diagnostic. SEntFiN is
   an external human-labelled sample with task and exposure limitations above.
 
-Next: Phase 6 remains planned. No Gradio interface, PDF extraction, deployment,
-model training or demographic fairness metrics were implemented in Phase 5B.
+Phase 6 adds the local interface described below. Deployment, hosting, training,
+OCR and demographic fairness metrics remain outside the implemented scope.
 
-Finalization checks: **229 passed, 8 skipped** by default; **237 passed** with
+Historical Phase 5B finalization checks: **229 passed, 8 skipped** by default; **237 passed** with
 offline cached-model integration. Replaying all three actual cohorts exactly
 matched their saved FinBERT/baseline metrics, counts, exclusions, error/subgroup
 results and prediction caches. Verification artifacts are ignored under
 `outputs/phase5b/finalization/`. No datasets or generated outputs are tracked.
+
+## Phase 6: local document analyzer
+
+Launch from the repository root after activating the existing model environment:
+
+```bash
+source .venv-finsentiment/bin/activate
+# Only if the new UI/PDF packages are absent:
+python -m pip install --no-cache-dir --only-binary=:all: gradio==6.31.0 PyMuPDF==1.26.7
+HF_HUB_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python -m src.app
+```
+
+Open the printed `http://127.0.0.1:7860` URL (the port may differ if occupied).
+The app binds to loopback, with sharing disabled; no hosting is configured.
+A fresh environment uses `requirements.txt` and needs the pinned Phase 1 model
+cached first. The app itself always uses `local_files_only=True` and never downloads
+model weights. The PDF library is pinned to a release without mandatory OCR/layout
+model dependencies. [PyMuPDF's licence](https://pypi.org/project/pymupdf/1.26.7/)
+is AGPL/commercial; Gradio's package includes its own transitive UI/server libraries.
+
+1. Upload one English **UTF-8 TXT** or **text-based PDF**.
+2. Optionally enter company, ticker, fiscal year and quarter. Blank metadata is
+   recorded as unspecified, with blank CSV cells; no company, dates or URLs are inferred.
+3. Click **Analyze Document**. Controls are disabled while processing. The first
+   analysis loads one cached CPU model; subsequent analyses reuse it. Requests are
+   serialized around the model and tokenizer; the local queue holds at most eight.
+4. Review total analyzed segments, the three predicted-label percentages, net
+   sentiment, and up to three positive and three negative supporting statements,
+   ranked by uncalibrated confidence. Missing positive/negative categories are
+   handled explicitly.
+5. Use the compact **Download CSV** and **Download PDF Report** buttons underneath the
+   results. There is no skipped-content counter, details section or third download
+   in the visible interface. Internal tracking and report notes remain available.
+   If content could not be processed, a short warning explains that the results
+   cover only the processed text. Clearing/replacing an upload or a failed analysis
+   clears prior outputs and
+   disables downloads until another analysis succeeds.
+
+The percentages describe **predicted segment labels, not accuracy**. Net sentiment
+is `(positive_count - negative_count) / classified_count`, including neutral units
+in the denominator, exactly as in Phase 4. No benchmark accuracy is assigned to
+an uploaded document. Sentiment measures language, not financial health or investment
+value; it is not investment advice.
+
+### Pipeline and source mapping
+
+`upload → TXT/PDF extraction → Phase 2 normalization/segmentation → token-safe
+segments → existing FinBERT predict_batch → shared Phase 4 distribution → UI/downloads`
+
+The reusable Python entry point is independent of Gradio:
+
+```python
+from src.document_processing import analyze_document
+from src.reporting import AnalysisDownloads
+
+result = analyze_document("local_report.txt", {"company": "Example", "fiscal_year": 2025})
+downloads = AnalysisDownloads(result)
+try:
+    print(result["summary"])
+    # Read or copy downloads.csv, downloads.report and downloads.skipped here.
+finally:
+    downloads.cleanup()
+```
+
+The upload adapter leaves existing verified JSON metadata validation unchanged.
+It reuses `FinancialDocument` and Phase 2 preprocessing with a separate optional
+metadata contract; upload records are not verified-quarter JSON CLI input.
+Source IDs derive from the original file SHA-256. Each classified row keeps its
+parent unit ID, source-order index, original text, character offsets, segment index
+and total, model revision, token count, and PDF page numbers where available.
+Offsets refer to decoded TXT or extracted PDF text, not raw PDF byte positions.
+
+Ordinary sentences and paragraph fragments remain intact. Oversized units are
+partitioned at whitespace word boundaries using the actual cached tokenizer,
+including special tokens, with every final segment checked against the model limit
+(up to 512). No token decoding, overlap or silent truncation is used. Numbers and
+negations remain in the text; a standalone trailing `not`, `no`, `never` or
+`without` is kept with the following word when possible. An unbreakable word that
+cannot fit causes an explicit error. A split sentence contributes several text
+segments to the distribution; these are not claimed to be independent original
+sentences. Context across a split can still affect sentiment.
+
+### Limits and PDF extraction
+
+Uploads are limited to **5 MiB**, **30 PDF pages**, **500,000 extracted characters**
+and **2,000 analysis segments/units**. Exceeding a limit rejects the analysis rather
+than returning a silently partial result. Batch size defaults to 8.
+
+PDF extraction uses PyMuPDF text blocks ordered top-to-bottom then left-to-right,
+with blank lines between blocks. Detected ruled-table blocks are excluded and
+recorded with their text and page in the skipped-content CSV. Short, exactly repeated
+margin blocks are removed only when repeated across at least three and at least
+80% of pages. Numeric/punctuation-only Phase 2 fragments are also explicitly logged.
+These fragments and excluded PDF blocks remain tracked internally; the technical
+report includes their counts and extraction notes, and image/blank pages are
+reported in extraction warnings. The UI shows a short warning if content was
+excluded, without a dedicated skipped counter or details section. Exclusions are
+not counted as neutral. Review the downloaded report before interpreting a partial
+analysis.
+
+Scanned/image-only PDFs require OCR and are rejected. Mixed PDFs report pages
+without extractable text. Corrupted and password-protected PDFs return clear
+errors. Multi-column reading order, borderless tables, unusual fonts and reading
+order inside blocks can be unreliable; no complete-layout or full-document
+coverage guarantee is made. No OCR, vision model or layout-model package is used.
+
+Each analysis owns a unique temporary output directory. Successful CSV contains
+exactly the classified rows in source order, with all three actual probabilities;
+skipped content has its own internal file through the reusable reporting API,
+while the UI exposes only prediction CSV and PDF downloads. Outputs retain
+the supplied metadata. Original text is preserved.
+The report summarizes the same results and limitations, with literal original
+supporting text. Download files are temporary: request-owned originals are cleaned
+on replacement or state expiry (one hour); Gradio's upload/download cache removes
+files older than one hour on a ten-minute cycle. Save wanted reports locally.
+
+### Verification and output examples
+
+```bash
+python -m pytest -q
+RUN_FINBERT_INTEGRATION=1 HF_HUB_OFFLINE=1 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python -m pytest -q
+```
+
+Final Phase 6 cleanup test results: **273 passed, 13 skipped** by default; **286 passed**
+with offline cached-model integration. `pip check` reports no broken requirements.
+
+Most new tests use fictional text and mock classifiers; PDFs are generated small
+fixtures. Opt-in tests share the existing CPU model, exercise real tokenizer limits
+and perform genuine cached inference. Existing CLI and evaluation tests remain.
+
+Real validation used the existing Microsoft FY2025 Q1 selected narrative TXT:
+**22 classified units, zero skips, 17 positive, zero negative, 5 neutral**;
+**77.27% / 0% / 22.73%**, net **0.7727**. With the same selected input and sentence
+policy, text order and predicted labels matched Phase 4; probabilities matched
+within `1e-6`. These are predicted language labels, not measured earnings accuracy.
+A one-page locally derived text-PDF excerpt also processed successfully (four
+classified units). Its different input scope is not compared to the full TXT.
+
+The locally launched Gradio server returned HTTP 200. Gradio's real HTTP client
+uploaded the genuine TXT and the text-PDF excerpt, downloaded and validated CSV
+and reports, then confirmed that an empty upload cleared the prior downloads.
+Initial Phase 6 verification used the HTTP client. The final refinement also
+verified Firefox browser rendering, uploads, button clicks and actual downloads
+at desktop and mobile sizes; see the [acceptance record](docs/phase6_acceptance.md).
+
+Current CSV/PDF examples and metadata-only download verification are local and
+ignored under `outputs/phase6/pdf_reports/`: each synthetic/authentic case contains
+`predictions.csv` and `financial_document_report.pdf`. Reports use the installed
+PyMuPDF library, embedded fonts, A4 pages with consistent margins, a sentiment
+summary table, wrapped original supporting statements and page numbers. No new
+library, browser renderer, font download or model is needed. Optional supplied
+metadata, model identity and methodological limitations are retained. Markdown
+rendering remains an internal helper; the visible report download is PDF only.
+Synthetic and genuine Microsoft reports were validated and visually inspected;
+both corresponding CSV files are byte-identical to their earlier Markdown-era
+exports. Historical Markdown files remain local records of those earlier runs.
+CSV begins with:
+
+```csv
+document_id,company,ticker,fiscal_year,fiscal_quarter,sentence_id,sentence_index,text,predicted_sentiment,prob_positive,prob_negative,prob_neutral,model_name
+```
+
+Additional columns preserve source and segment provenance. The genuine report's
+summary includes `classified segments: 22`, `skipped units/blocks: 0` and
+`Net sentiment: 0.7727`. Copyrighted source text remains outside Git. The three
+benchmark evidence levels above and their methodology are unchanged.
+
+Phase 6 is local-only; no deployment or subsequent-phase features are included.
+
+The visible application and browser title is **Financial Document Analyzer**.
+The repository and internal FinSentiment identifiers are unchanged. The two
+exports use native Gradio `DownloadButton` components with small SVG icons, small
+sizing and wrapping side-by-side layout. No report file-preview cards, skipped-content
+section or custom layout CSS are used. On narrow screens, the supporting table can scroll horizontally.
+Restart an already running app process to load this UI refinement.
+
+Original, ready-to-upload testing documents are in
+[`tests/fixtures/ui_samples/`](tests/fixtures/ui_samples/README.md): ten-sentence
+`positive_earnings.txt` and `negative_earnings.txt`, twelve-sentence
+`mixed_earnings.txt`, `sample_earnings.pdf`, and `image_only_earnings.pdf`.
+They test functionality and must not be treated as labelled accuracy benchmarks.
+The latest [acceptance record](docs/phase6_acceptance.md) documents actual model
+predictions, errors, browser interactions and download checks. The local app was
+verified at `http://127.0.0.1:7860`. The existing evaluation methodology and
+benchmark figures remain unchanged.

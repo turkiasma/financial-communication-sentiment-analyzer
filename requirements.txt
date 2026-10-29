@@ -5,4 +5,7 @@ transformers==5.20.2
 numpy==2.5.4
 pytest==9.1.1
 scikit-learn==1.9.1
-# pandas and nltk remain installed locally but are not required by this pipeline.
+# pandas is required transitively by Gradio; nltk is not required by the core pipeline.
+# Local upload interface and dependency-free text-PDF extraction (no OCR/layout model).
+gradio==6.31.0
+PyMuPDF==1.26.7

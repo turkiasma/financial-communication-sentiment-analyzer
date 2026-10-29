@@ -16,6 +16,20 @@ from src.records import PREDICTION_FIELDS, read_jsonl, validate_record, validate
 
 ANALYSIS_VERSION = "1"
 LABELS = ("positive", "negative", "neutral")
+
+
+def sentiment_distribution(labels: list[str]) -> dict[str, Any]:
+    """Shared label-count definition for quarterly analysis and document uploads."""
+    if any(label not in LABELS for label in labels):
+        raise ValueError("Unknown sentiment label.")
+    count = len(labels)
+    result = {f"{label}_count": labels.count(label) for label in LABELS}
+    result.update({f"{label}_pct": 100 * result[f"{label}_count"] / count if count else None
+                   for label in LABELS})
+    result["net_sentiment"] = (result["positive_count"] - result["negative_count"]) / count if count else None
+    return result
+
+
 SUMMARY_COLUMNS = [
     "company", "ticker", "fiscal_year", "fiscal_quarter", "documents_analyzed",
     "total_sentences", "classified_sentences", "skipped_sentences", "observed_sentences",
@@ -233,7 +247,7 @@ def analyze_predictions(
                     "source_url", "text", "original_text", "source_sha256", "source_char_start", "source_char_end")},
                 "predicted_sentiment": label, "probability": r[f"prob_{label}"],
             } for r in ranked]
-        row["net_sentiment"] = (row["positive_count"] - row["negative_count"]) / count if count else None
+        row.update(sentiment_distribution([r["predicted_sentiment"] for r in classified]))
         periods.append({
             "summary": row, "documents": [documents[doc_id] for doc_id in doc_ids], "evidence": evidence,
             "classified_sentence_ids": [r["sentence_id"] for r in classified],
