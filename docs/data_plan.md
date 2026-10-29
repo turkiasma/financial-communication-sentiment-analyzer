@@ -1,8 +1,10 @@
 # Financial document and evaluation data plan
 
-Source pages checked on **2026-10-29**. This is a source shortlist, not an ingested
-dataset. No third-party financial documents or evaluation datasets are included
-in the repository. Links and metadata below were checked against official pages.
+Source pages checked on **2026-10-29**. This contains the wider source shortlist
+and a four-release Phase 3 demonstration. Source text, snapshots and generated
+predictions are kept locally in ignored directories; no third-party document text
+or evaluation dataset is tracked in Git. Links and metadata below were checked
+against official pages.
 
 ## Candidate earnings releases
 
@@ -48,7 +50,8 @@ For either candidate, check the applicable terms and permissions for the intende
 acquisition, extraction and publication before assembling a corpus. Keep notices
 with originals; keep third-party text and processed text out of Git. Commit only
 links, independently recorded metadata, code and original synthetic fixtures
-unless redistribution permission is established. There is no scraper in Phase 2.
+unless redistribution permission is established. No scraper, crawler or downloader
+is part of the application.
 
 When lawful local text is prepared, place it in ignored `data/raw/`. Record the
 official URL, exact fiscal period, publication date and document type. In `extra`,
@@ -61,6 +64,86 @@ Keep UTF-8 encoding and preprocessing version/tokenizer revision with results.
 
 The supplied fixture is original fictional text and explicitly marked synthetic.
 Its example.com URL is a placeholder, not financial evidence.
+
+## Phase 3: four-release local demonstration
+
+The first two fiscal periods for each company were rechecked and processed:
+
+| Document ID / metadata | Fiscal period | Published | Selected sentences classified |
+| --- | --- | --- | --- |
+| [msft_fy2025_q1](../data/metadata/msft_fy2025_q1.json) | Microsoft FY2025 Q1 | 2024-10-30 | 3 |
+| [msft_fy2025_q2](../data/metadata/msft_fy2025_q2.json) | Microsoft FY2025 Q2 | 2025-01-29 | 4 |
+| [aapl_fy2025_q1](../data/metadata/aapl_fy2025_q1.json) | Apple FY2025 Q1 | 2025-01-30 | 6 |
+| [aapl_fy2025_q2](../data/metadata/aapl_fy2025_q2.json) | Apple FY2025 Q2 | 2025-05-01 | 5 |
+
+Official source URLs and exact quarter-end dates are in the table above and each
+metadata file. These are fiscal periods; Microsoft FY2025 Q1 was published in
+calendar 2024. None of the required source metadata was missing or uncertain.
+
+### Consistent extraction scope
+
+Policy `opening_ceo_cfo_statements_v1`: select the **complete first CEO statement
+paragraph and complete first CFO statement paragraph** from the opening results
+narrative, in source order. Include every sentence in those paragraphs, including
+product commentary and any challenging outlook they contain. Do not filter on
+sentiment, product name, financial number or predicted label. Exclude other
+paragraphs uniformly: quantitative bullet/table summaries, business highlights,
+dividend notices, separate outlook sections, webcast logistics, annual summaries,
+corporate descriptions, legal boilerplate, navigation and notices.
+
+This is a deliberately narrow, comparable management-commentary demonstration.
+It does **not** claim to cover the full earnings release, all risks, or all guidance.
+A future broader scope should be defined explicitly and applied consistently
+before period comparisons. The different companies' fiscal calendars also differ.
+
+Acquisition was a one-time retrieval of the four explicitly selected official
+pages, with no crawling or discovery automation. Both sites returned accessible
+HTML without authentication or access bypass. Complete source snapshots remain
+in ignored `data/raw/source_html/` with their notices intact. The two statement
+blocks were selected from those snapshots, HTML entities decoded, whitespace
+collapsed and a blank line placed between paragraphs. The local TXT contains only
+those two original statement paragraphs; no text was generated or paraphrased.
+No acquisition script or third-party text was added to tracked project files.
+
+Microsoft statement blocks were HTML `p` elements, zero-based block indices 6 and
+7 in each saved page. Apple statement blocks were `div.pagebody-copy`, indices 1
+and 2 in each saved page. These positions describe the saved snapshots and should
+not be assumed stable if websites change. Each manifest records the source HTML
+hash, extracted TXT hash, retrieval date, quarter-end date, block selection,
+selection policy, extraction exclusions and rights notes in `extra`.
+
+The local end-to-end run produced 18 sentence records and 18 CPU FinBERT
+predictions, with no skips or errors. All metadata and source spans were checked,
+and prediction probability sums were validated. Results are in ignored
+`outputs/phase3/real_predictions.jsonl`, per-document JSONL files and a small
+`execution_summary.json`. This is an execution demonstration, not an accuracy
+evaluation or quarterly sentiment comparison.
+
+### Manual preparation on another checkout
+
+1. Open the four official URLs using the links above and check applicable terms
+   for your intended use. Preserve original notices with any retained originals.
+2. Identify the first CEO and first CFO statement paragraphs in the opening
+   narrative. Include the full paragraphs without selecting individual sentences.
+3. Save the selected text as UTF-8 in `data/raw/<document_id>.txt`, keeping the
+   paragraphs in source order, separated by a blank line. Do not include headings
+   or tables. Metadata `file_path` is relative to `data/metadata/`.
+4. Confirm source facts in the metadata against the release. For your own
+   extraction, update `extra.retrieved_at`, extraction method, source/TXT hashes,
+   selection details and rights notes to match the files you actually obtained;
+   do not reuse this run's hashes if your bytes differ. Keep document IDs unique.
+5. Run `python -m src.preprocessing --metadata data/metadata/<document_id>.json
+   --output outputs/<document_id>_sentences.jsonl`, then
+   `python -m src.batch_inference --input outputs/<document_id>_sentences.jsonl
+   --output outputs/<document_id>_predictions.jsonl --batch-size 8 --local-files-only`.
+6. Inspect sentence boundaries, CLI skip counts and any skipped-record companion
+   file. Confirm `original_text` and offsets against the local TXT. Never claim
+   classification for a sentence that was skipped.
+
+Real-text availability is intentionally local: a fresh clone contains metadata
+and instructions, not the source text or derived predictions. Public access did
+not establish redistribution permission. No text or model weights need to be
+downloaded again on this laptop; no additional dependencies were installed.
 
 ## Future labelled evaluation input — Phase 5 only
 

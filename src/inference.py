@@ -64,12 +64,44 @@ class FinBertAnalyzer:
         with torch.inference_mode():
             logits = self.model(**inputs).logits
             scores = torch.softmax(logits, dim=-1)[0].tolist()
+        return self._prediction(sentence, scores)
+
+    def _prediction(self, sentence: str, scores: list[float]) -> Prediction:
         probabilities = {self.labels[i]: score for i, score in enumerate(scores)}
         return {
             "sentence": sentence,
             "label": max(probabilities, key=probabilities.__getitem__),
             "probabilities": probabilities,
         }
+
+    def predict_batch(self, sentences: list[str]) -> list[Prediction]:
+        """Classify one CPU batch without truncation; reject overlong inputs.
+
+        Unlike the original single-sentence interface, this method never discards
+        tokens. The caller controls batch size; padding is only to this batch's
+        longest sentence, including special tokens.
+        """
+        if not isinstance(sentences, list):
+            raise TypeError("sentences must be a list of strings")
+        for sentence in sentences:
+            if not isinstance(sentence, str):
+                raise TypeError("each sentence must be a string")
+            if not sentence.strip():
+                raise ValueError("sentences must not be empty or whitespace-only")
+        if not sentences:
+            return []
+        inputs = self.tokenizer(
+            sentences, return_tensors="pt", padding=True, truncation=False
+        )
+        if inputs["input_ids"].shape[1] > self.model.config.max_position_embeddings:
+            raise ValueError("Batch contains a sentence exceeding the model token limit; no truncation applied.")
+        inputs = {name: tensor.to(self.device) for name, tensor in inputs.items()}
+        self.model.eval()
+        with torch.inference_mode():
+            scores = torch.softmax(self.model(**inputs).logits, dim=-1).tolist()
+        if len(scores) != len(sentences):
+            raise ValueError("Model returned an unexpected number of predictions.")
+        return [self._prediction(sentence, row) for sentence, row in zip(sentences, scores)]
 
 
 def main() -> None:

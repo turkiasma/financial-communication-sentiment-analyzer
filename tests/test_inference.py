@@ -103,9 +103,9 @@ def test_invalid_model_mapping(analyzer, monkeypatch):
     os.environ.get("RUN_FINBERT_INTEGRATION") != "1",
     reason="Set RUN_FINBERT_INTEGRATION=1 after caching the model.",
 )
-def test_real_finbert_cpu_inference():
+def test_real_finbert_cpu_inference(cached_analyzer):
     # One load for all real-model assertions; never download during tests.
-    analyzer = FinBertAnalyzer(local_files_only=True)
+    analyzer = cached_analyzer
     assert not analyzer.model.training
     assert all(p.device.type == "cpu" for p in analyzer.model.parameters())
     sentence = "The company reported strong revenue growth."

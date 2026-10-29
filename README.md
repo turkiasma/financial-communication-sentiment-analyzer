@@ -2,15 +2,16 @@
 
 A Python backend NLP project exploring how financial-domain NLP can help analyze
 and compare corporate communication sentiment across reporting periods.
-**Phases 1 and 2 are implemented:** local FinBERT sentence inference, plus local
-English TXT ingestion and sentence preprocessing with provenance. This is a portfolio/research project, not a trading,
+**Phases 1–3 are implemented:** local FinBERT inference, English TXT ingestion,
+sentence preprocessing with provenance, and CPU batch predictions demonstrated on
+real earnings-release excerpts. This is a portfolio/research project, not a trading,
 stock-prediction or financial recommendation system.
 
 ## Roadmap
 
 1. **Project setup and FinBERT baseline — implemented.**
 2. **Financial document ingestion and preprocessing — implemented.**
-3. Batch sentiment inference and structured prediction export — planned.
+3. **Batch sentiment inference and structured prediction export — implemented.**
 4. Reporting-period sentiment comparison — planned.
 5. Dataset-based evaluation and robustness analysis — planned.
 6. Final research reports and portfolio documentation — planned.
@@ -20,13 +21,17 @@ stock-prediction or financial recommendation system.
 ```text
 src/__init__.py          Package marker
 src/inference.py         Reusable CPU classifier and five-sentence terminal demo
+src/batch_inference.py   Validated JSONL input, CPU batches and prediction JSONL CLI
 src/model_config.py      Shared pinned model/tokenizer settings
 src/ingestion.py         JSON metadata validation and UTF-8 TXT loading
 src/preprocessing.py     Sentence records, token-length checks and JSONL CLI
 tests/test_inference.py  Offline unit tests and an opt-in model integration test
 tests/test_ingestion.py  Ingestion and metadata validation tests
 tests/test_preprocessing.py  Segmentation, provenance, length policy and CLI tests
+tests/test_batch_inference.py  Batch validation, metadata, long inputs and integration tests
+tests/conftest.py        Single shared cached model for opt-in integration tests
 tests/fixtures/          Original fictional earnings text and matching metadata
+data/metadata/          Four verified real-release metadata files; no release text
 docs/data_plan.md        Verified source shortlist and future evaluation input plan
 pytest.ini              Test discovery and integration marker
 requirements.txt        Direct dependencies pinned to the verified environment
@@ -239,9 +244,9 @@ python -m src.preprocessing \
 
 `keep` sets `exceeds_token_limit=true` on overlong records and prints their count.
 It does not make them model-ready. No text is silently truncated or automatically
-split into chunks that could lose sentiment context. Phase 3 must handle flagged
-records explicitly before calling Phase 1 inference, whose standalone interface
-still truncates overlong inputs. For programmatic reuse:
+split into chunks that could lose sentiment context. Phase 3 skips flagged records
+with reasons, while the standalone Phase 1 `predict` interface retains its original
+truncation behavior. For programmatic reuse:
 
 ```python
 from src.ingestion import load_document
@@ -250,7 +255,7 @@ from src.preprocessing import load_token_counter, preprocess_document
 document = load_document("tests/fixtures/synthetic_earnings.json")
 counter = load_token_counter()  # Cache-only tokenizer; no model weights.
 records = preprocess_document(document, token_counter=counter)
-# Future Phase 3 can pass each eligible record['text'] to the inference layer.
+# These records can be supplied to Phase 3 predict_records.
 ```
 
 The shared model settings were extracted into `src/model_config.py`; Phase 1
@@ -267,17 +272,139 @@ metadata, IDs, source spans and token counts were checked against the input.
 
 See [the data plan](docs/data_plan.md) for verified Microsoft and Apple FY2025
 Q1–Q4 releases, exact source links, fiscal/publication dates, access terms,
-provenance recommendations and future labelled-data input planning. No third-party
-financial text or evaluation data was downloaded into the repository. Publicly
-readable documents are not assumed redistributable. The supplied FiQA URL now
+provenance recommendations and future labelled-data input planning. Phase 3 real
+source text and predictions are local, ignored files; no third-party text is
+tracked in Git. Publicly readable documents are not assumed redistributable. The supplied FiQA URL now
 redirects to a gated aspect-based dataset; its actual schema and mapping must be
 inspected in Phase 5. No evaluation adapter or metrics are implemented.
 
+## Phase 3: CPU batch sentiment inference
+
+The pipeline is `Phase 2 JSONL → record validation → length checks → padded CPU
+batches → prediction JSONL`. `FinBertAnalyzer.predict_batch` reuses the same model,
+label mapping and softmax formatting as Phase 1. The model runs in evaluation mode
+under `torch.inference_mode()`. It is loaded once per CLI invocation, and the
+Python API can reuse one analyzer across documents. Default batch size is **8**.
+Padding is to the longest sentence in each batch; truncation is disabled.
+
+```bash
+# Run Phase 2 first if this input does not exist; choose fresh output filenames.
+python -m src.preprocessing \
+  --metadata tests/fixtures/synthetic_earnings.json \
+  --output outputs/synthetic_batch_input.jsonl
+python -m src.batch_inference \
+  --input outputs/synthetic_batch_input.jsonl \
+  --output outputs/synthetic_batch_predictions.jsonl \
+  --batch-size 8 \
+  --local-files-only
+```
+
+Use `HF_HUB_OFFLINE=1` as well for an entirely offline run. No model download is
+needed in the existing environment. Without `--local-files-only`, the CLI permits
+normal Hugging Face cache/network behavior, still using the pinned model revision.
+
+### Input validation and output schema
+
+Input must contain the complete Phase 2 record schema above, including required
+document metadata, source text/spans/hash, and tokenization provenance. Blank JSONL
+lines are ignored. Malformed JSON, duplicate JSON keys or sentence IDs, missing
+fields, blank text, invalid metadata and existing prediction fields are rejected
+with an error before output is written. Extra source fields are preserved.
+The input tokenizer identity must match the pinned FinBERT revision.
+
+Every successful output retains **every input field unchanged** and adds:
+
+| Field | Meaning |
+| --- | --- |
+| `predicted_sentiment` | `positive`, `negative` or `neutral` from the model label mapping |
+| `prob_positive`, `prob_negative`, `prob_neutral` | Actual softmax probabilities; sum approximately 1 |
+| `model_name`, `model_revision` | `ProsusAI/finbert` and the pinned checkpoint revision |
+| `inference_device` | `cpu` |
+| `batch_inference_version` | Prediction pipeline version, currently `1` |
+
+Successful predictions remain in input order with unique source sentence IDs.
+There are no timestamps in prediction records. Numerical reproducibility is
+checked to absolute tolerance `1e-6`; hardware, batch padding or dependency changes
+may cause small differences. Neither the JSONL output nor demo counts establish
+classification accuracy.
+
+**Long inputs are skipped, never truncated.** Phase 2 flags and stored over-limit
+counts cause immediate skips. For remaining records, actual token lengths are
+recomputed using the loaded tokenizer (including special tokens). Over-limit
+texts are skipped even if their stored flag is false. A stale short token count
+raises an error requesting preprocessing again, rather than silently rewriting
+provenance. There is no automatic chunking in Phase 3.
+
+The CLI prints loaded/classified/skipped counts, model name, CPU device and output
+location. If anything is skipped, it also prints each reason and writes a companion
+file named `<output>.skipped.jsonl`. Each skipped record preserves its input plus
+`skip_reason`, with **no sentiment assigned**. An all-skipped run writes an empty
+prediction file and does not load model weights. Existing prediction/companion
+files are never overwritten. Invalid inputs return exit code 2; a completed run
+with documented skips returns 0, so check the summary and companion file.
+
+For reuse without reloading the model:
+
+```python
+from src.inference import FinBertAnalyzer
+from src.batch_inference import predict_records, read_records
+
+analyzer = FinBertAnalyzer(local_files_only=True)
+result = predict_records(read_records("outputs/synthetic_batch_input.jsonl"),
+                         analyzer=analyzer, batch_size=8)
+print(len(result.predictions), len(result.skipped))
+```
+
+### Authentic financial-document demonstration
+
+Four official releases were verified and their complete opening CEO and CFO
+statement paragraphs extracted locally using one consistent selection policy:
+Microsoft FY2025 Q1–Q2 and Apple FY2025 Q1–Q2. All sentences in the selected
+paragraphs were included, including product commentary. These are **excerpts**,
+not full releases or an exhaustive financial corpus. No sentiment-based selection
+or quarter-over-quarter calculation was performed.
+
+See [the data plan](docs/data_plan.md) for official links, fiscal dates, exact
+extraction scope, access/redistribution notes and a manual preparation workflow.
+The four `data/metadata/*.json` files are suitable for Git; their associated TXT
+files and original HTML snapshots are under ignored `data/raw/`. On another
+checkout, prepare the TXT files first. For an existing local real document:
+
+```bash
+python -m src.preprocessing \
+  --metadata data/metadata/msft_fy2025_q1.json \
+  --output outputs/msft_q1_sentences.jsonl
+python -m src.batch_inference \
+  --input outputs/msft_q1_sentences.jsonl \
+  --output outputs/msft_q1_predictions.jsonl \
+  --batch-size 8 --local-files-only
+```
+
+User-provided releases use the same workflow: place a UTF-8 narrative TXT in
+`data/raw/`, create a matching metadata JSON with accurate source facts, then run
+these two CLIs. HTML/PDF ingestion and automated downloading are not implemented.
+
+Verification on 2026-10-29: **112 passed, 3 skipped** by default and **115 passed**
+with `RUN_FINBERT_INTEGRATION=1 HF_HUB_OFFLINE=1`. Integration tests share one
+cached model and cover real multi-batch inference, CPU placement, all probabilities,
+metadata preservation and agreement across batch sizes and single inference.
+
+The local real-document run classified **18 of 18 sentences across four releases**
+in batches of 8, with **0 skips and 0 processing errors**. The measured pipeline
+time was about **1.16 seconds**, including about 0.26 seconds to load cached model
+weights, excluding Python import/startup and source acquisition; timings are
+machine/cache-specific. Predictions and the execution summary are in ignored
+`outputs/phase3/`. These counts describe software execution, not labelled model
+evaluation. Synthetic and real-data CLI runs also succeeded offline.
+
 ## Current limitations
 
-- Local English TXT only, with manually prepared metadata; no PDF/HTML parsing,
-  automatic language verification, scraping, batch inference, quarterly comparisons
-  or dataset evaluation. JSONL preprocessing export is implemented.
+- Local English TXT only, with manually prepared metadata; no PDF/HTML ingestion,
+  automatic language verification, scraping, quarterly comparisons or dataset
+  evaluation. JSONL preprocessing and batch prediction export are implemented.
+- All JSON records/results are held in memory; model tensors are limited to one
+  configurable batch. The implementation targets small collections, not large
+  corpus streaming. CSV export is not implemented.
 - Segmentation is heuristic and requires review. Long sentences are rejected or
   explicitly flagged by preprocessing; standalone Phase 1 inference still truncates.
 - Softmax scores are model outputs, not calibrated certainty or financial advice.
@@ -288,6 +415,6 @@ inspected in Phase 5. No evaluation adapter or metrics are implemented.
   that dataset must not be described as independent unseen-data evaluation.
   FiQA also needs dataset inspection and careful label mapping before evaluation.
 
-Next: Phase 3 can read these sentence records, handle flagged long inputs, run CPU
-FinBERT inference in batches and preserve metadata alongside all probabilities.
-That work is not implemented here.
+Next: Phase 4 can compare equivalent narrative sections across fiscal periods,
+using the preserved provenance and explicitly accounting for skipped text and
+extraction scope. No period aggregation or formal evaluation is implemented here.

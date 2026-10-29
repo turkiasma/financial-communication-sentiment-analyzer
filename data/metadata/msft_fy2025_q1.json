@@ -1,0 +1,30 @@
+{
+  "document_id": "msft_fy2025_q1",
+  "company": "Microsoft Corporation",
+  "ticker": "MSFT",
+  "fiscal_year": 2025,
+  "fiscal_quarter": "Q1",
+  "document_type": "earnings_release",
+  "publication_date": "2024-10-30",
+  "source_url": "https://www.microsoft.com/en-us/investor/earnings/fy-2025-q1/press-release-webcast",
+  "language": "en",
+  "file_path": "../raw/msft_fy2025_q1.txt",
+  "extra": {
+    "synthetic": false,
+    "retrieved_at": "2026-10-29",
+    "quarter_end": "2024-09-30",
+    "selection_policy": "opening_ceo_cfo_statements_v1",
+    "content_scope": "Complete opening CEO and CFO statement paragraphs, including product commentary; all sentences retained.",
+    "extraction_method": "One-time selection from four explicitly chosen official HTML pages; HTML entities decoded and whitespace collapsed. No crawler or scraper added to the project.",
+    "source_html_tag": "p",
+    "source_html_class": null,
+    "source_block_indices": [
+      6,
+      7
+    ],
+    "source_html_sha256": "cc81849768f723faaae4216eefb116765f5a37a91b21e0aa58c85209d6637a71",
+    "extracted_txt_sha256": "7cb996b3428ef37577bc803c04a7cb850dae9862920edf1ed6c4446738cfc4bc",
+    "excluded_content": "Other narrative sections, tables, navigation, webcast logistics, corporate descriptions and legal boilerplate; selection applied identically to all four documents.",
+    "rights_notes": "Local personal research demonstration only; source text and derived predictions excluded from Git. Public access does not establish redistribution permission."
+  }
+}

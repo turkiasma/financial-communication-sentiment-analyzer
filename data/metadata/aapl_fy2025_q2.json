@@ -1,0 +1,30 @@
+{
+  "document_id": "aapl_fy2025_q2",
+  "company": "Apple Inc.",
+  "ticker": "AAPL",
+  "fiscal_year": 2025,
+  "fiscal_quarter": "Q2",
+  "document_type": "earnings_release",
+  "publication_date": "2025-05-01",
+  "source_url": "https://www.apple.com/newsroom/2025/05/apple-reports-second-quarter-results/",
+  "language": "en",
+  "file_path": "../raw/aapl_fy2025_q2.txt",
+  "extra": {
+    "synthetic": false,
+    "retrieved_at": "2026-10-29",
+    "quarter_end": "2025-03-29",
+    "selection_policy": "opening_ceo_cfo_statements_v1",
+    "content_scope": "Complete opening CEO and CFO statement paragraphs, including product commentary; all sentences retained.",
+    "extraction_method": "One-time selection from four explicitly chosen official HTML pages; HTML entities decoded and whitespace collapsed. No crawler or scraper added to the project.",
+    "source_html_tag": "div",
+    "source_html_class": "pagebody-copy",
+    "source_block_indices": [
+      1,
+      2
+    ],
+    "source_html_sha256": "fd83a89bc38e9e2a9243690ebe71d513c65793120493f9670a0f306b4a3c67ae",
+    "extracted_txt_sha256": "d1628a856d86eda370619123339a1faaa0304e9360061d310710c21fed383577",
+    "excluded_content": "Other narrative sections, tables, navigation, webcast logistics, corporate descriptions and legal boilerplate; selection applied identically to all four documents.",
+    "rights_notes": "Local personal research demonstration only; source text and derived predictions excluded from Git. Public access does not establish redistribution permission."
+  }
+}
