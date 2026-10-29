@@ -906,7 +906,12 @@ summary includes `classified segments: 22`, `skipped units/blocks: 0` and
 `Net sentiment: 0.7727`. Copyrighted source text remains outside Git. The three
 benchmark evidence levels above and their methodology are unchanged.
 
-Phase 6 is local-only; no deployment or subsequent-phase features are included.
+Phase 6 is committed and pushed. Native Gradio Hugging Face Spaces preparation is
+available in [`deploy/huggingface/`](deploy/huggingface/README.md), with a
+[local verification and manual deployment checklist](docs/huggingface_deployment_preparation.md).
+The preparation is tracked separately from Phase 6; no Space has been created or deployed.
+Local execution remains cache-only by default. The separate Space entry permits
+the pinned model's first-start download unless offline mode is explicitly enabled.
 
 The visible application and browser title is **Financial Document Analyzer**.
 The repository and internal FinSentiment identifiers are unchanged. The two

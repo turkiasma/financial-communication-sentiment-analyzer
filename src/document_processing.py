@@ -2,6 +2,7 @@
 
 import hashlib
 import math
+import os
 from pathlib import Path
 import re
 from threading import RLock
@@ -24,7 +25,14 @@ def get_analyzer():
     global _ANALYZER
     with _MODEL_LOCK:
         if _ANALYZER is None:
-            _ANALYZER = FinBertAnalyzer(local_files_only=True)
+            offline = os.environ.get("HF_HUB_OFFLINE", "").upper() in {"1", "TRUE", "YES", "ON"}
+            allow_download = os.environ.get("FINSENTIMENT_ALLOW_MODEL_DOWNLOAD", "0") == "1"
+            local_only = offline or not allow_download
+            try:
+                _ANALYZER = FinBertAnalyzer(local_files_only=local_only)
+            except (OSError, ValueError, RuntimeError) as exc:
+                mode = "cached offline files" if local_only else "the pinned Hub checkpoint and local cache"
+                raise ValueError(f"FinBERT could not load from {mode}. Check model availability, network access when enabled, and writable cache storage.") from exc
         return _ANALYZER
 
 

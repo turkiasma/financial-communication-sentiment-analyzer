@@ -60,11 +60,13 @@ def analyze_upload(upload, company, ticker, fiscal_year, fiscal_quarter, previou
         yield (*cleared[:5], "Analysis failed: " + message, None, *[gr.update(interactive=True) for _ in range(6)])
 
 
-def create_app():
+def create_app(*, hosted=False):
     with gr.Blocks(title="Financial Document Analyzer", analytics_enabled=False,
                    delete_cache=(600, 3600)) as demo:
         gr.Markdown("# Financial Document Analyzer\nAnalyze financial communications using FinBERT and explore sentence-level sentiment.")
         gr.Markdown("Results reflect FinBERT's classification of financial language and should not be interpreted as investment advice.")
+        if hosted:
+            gr.Markdown("**Hosted demo privacy:** Files are processed on this service's server and temporarily cached. Upload public, non-confidential documents only.")
         gr.Markdown("## 1. Upload & configuration\nEnglish UTF-8 TXT or text-based PDF · maximum 5 MiB · PDFs up to 30 pages · no scanned-PDF OCR.")
         upload = gr.File(label="Financial document", file_types=[".txt", ".pdf"], type="filepath", elem_id="document-upload")
         with gr.Row():
@@ -98,9 +100,17 @@ def create_app():
     return demo.queue(default_concurrency_limit=1, max_size=8)
 
 
+def launch_app(*, hosted=False, server_port=None, prevent_thread_lock=False, quiet=False):
+    """One launch path; local remains loopback-only, hosted binds the runtime port."""
+    return create_app(hosted=hosted).launch(
+        server_name=os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0") if hosted else "127.0.0.1", server_port=server_port,
+        share=False, max_file_size=MAX_UPLOAD_BYTES, inbrowser=False, show_error=False,
+        prevent_thread_lock=prevent_thread_lock, quiet=quiet,
+    )
+
+
 def main():
-    create_app().launch(server_name="127.0.0.1", share=False, max_file_size=MAX_UPLOAD_BYTES,
-                        inbrowser=False, show_error=False)
+    launch_app()
 
 
 if __name__ == "__main__":
