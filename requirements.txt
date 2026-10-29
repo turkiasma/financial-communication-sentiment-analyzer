@@ -1,0 +1,7 @@
+# Tested with Python 3.14.7. CPU-only wheel; no NVIDIA dependencies.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+transformers==5.20.2
+numpy==2.5.4
+pytest==9.1.1
+# pandas, scikit-learn and nltk are not needed until later phases.
