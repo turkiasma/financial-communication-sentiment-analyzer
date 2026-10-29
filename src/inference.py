@@ -6,9 +6,8 @@ from typing import TypedDict
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-MODEL_ID = "ProsusAI/finbert"
-# Pin the upstream snapshot so changes to the Hub do not change this baseline.
-MODEL_REVISION = "0bc2ac10dda6929bcb1f77ccc43c7ec5c424f031"
+from src.model_config import MODEL_ID, MODEL_REVISION
+
 SENTIMENT_LABELS = frozenset({"positive", "negative", "neutral"})
 
 

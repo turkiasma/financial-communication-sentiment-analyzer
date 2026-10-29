@@ -1,0 +1,17 @@
+{
+  "document_id": "synthetic_q1_2025",
+  "company": "Example Analytics Ltd.",
+  "ticker": "SYNTHETIC",
+  "fiscal_year": 2025,
+  "fiscal_quarter": "Q1",
+  "document_type": "earnings_release",
+  "publication_date": "2025-05-01",
+  "source_url": "https://example.com/synthetic-earnings",
+  "language": "en",
+  "file_path": "synthetic_earnings.txt",
+  "extra": {
+    "synthetic": true,
+    "section": "Original demonstration narrative",
+    "notes": "Fictional company and financial information; not real company data."
+  }
+}

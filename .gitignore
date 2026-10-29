@@ -10,6 +10,8 @@ htmlcov/
 .huggingface/
 models/
 outputs/
+data/raw/
+data/processed/
 *.egg-info/
 dist/
 build/

@@ -1,1 +1,1 @@
-"""Financial communication sentiment analysis: Phase 1 baseline."""
+"""Local financial sentiment inference and document preprocessing."""
