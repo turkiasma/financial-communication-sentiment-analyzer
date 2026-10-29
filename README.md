@@ -913,6 +913,13 @@ The preparation is tracked separately from Phase 6; no Space has been created or
 Local execution remains cache-only by default. The separate Space entry permits
 the pinned model's first-start download unless offline mode is explicitly enabled.
 
+An alternative minimal Streamlit frontend is prepared at
+[`deploy/streamlit/app.py`](deploy/streamlit/app.py), reusing the same backend and
+CSV/PDF exporters. See its [preparation and verification checklist](docs/streamlit_deployment_preparation.md)
+for Python 3.12, entrypoint-local runtime requirements, session privacy and memory
+limitations. Streamlit preparation is tracked separately from deployment; no
+Community Cloud app has been deployed. The existing Gradio workflow below remains available.
+
 The visible application and browser title is **Financial Document Analyzer**.
 The repository and internal FinSentiment identifiers are unchanged. The two
 exports use native Gradio `DownloadButton` components with small SVG icons, small
